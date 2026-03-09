@@ -1114,6 +1114,16 @@ export default function App() {
   const [showAIGen,setShowAIGen]   = useState(false);
   const [showTemplates,setShowTemplates] = useState(false);
   const [streak,setStreak]         = useState(loadStreak);
+  const [scoreHistory,setScoreHistory]         = useState(loadScoreHist);
+  const [weeklyReviews,setWeeklyReviews]       = useState(loadWeekly);
+  const [acctData,setAcctData]               = useState(loadAcct);
+  const [missionTask,setMissionTask]           = useState(null);
+  const [missionDone,setMissionDone]           = useState(false);
+  const [showMorningPrompt,setShowMorningPrompt] = useState(false);
+  const [showEOD,setShowEOD]                   = useState(false);
+  const [missedTasks,setMissedTasks]           = useState([]);
+  const [eodDismissed,setEodDismissed]         = useState(false);
+  const [showBrainDump,setShowBrainDump]       = useState(false);
   const prevRates = useRef({});
   const focusTimer = useRef(null);
   const [radioMode,setRadioMode]           = useState(false);
