@@ -715,8 +715,8 @@ Your role: Analyse performance data, identify bottlenecks and risks, give SPECIF
           ].map(p => (
             <div key={p.label} className="mb16">
               <div className="row-sb mb8">
-                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-2)" }}>{p.label}</span>
-                <span style={{ fontSize: 14, fontFamily: "DM Mono, monospace", color: p.color, fontWeight: 700 }}>
+                <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-2)" }}>{p.label}</span>
+                <span style={{ fontSize: 13, fontFamily: "DM Mono, monospace", color: p.color, fontWeight: 500 }}>
                   {p.done}/{p.total} ({p.total ? Math.round((p.done / p.total) * 100) : 0}%)
                 </span>
               </div>
@@ -736,10 +736,10 @@ Your role: Analyse performance data, identify bottlenecks and risks, give SPECIF
               <div className="row-sb mb6">
                 <div className="row gap6">
                   <span style={{ fontSize: 14 }}>{b.emoji}</span>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: b.color }}>{b.name}</span>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: b.color }}>{b.name}</span>
                   {b.overdue > 0 && <span className="badge badge-red">{b.overdue} overdue</span>}
                 </div>
-                <span style={{ fontSize: 15, fontFamily: "DM Mono, monospace", fontWeight: 800, color: b.rate >= 70 ? "var(--green)" : b.rate >= 40 ? "var(--amber)" : "var(--red)" }}>{b.rate}%</span>
+                <span style={{ fontSize: 13, fontFamily: "DM Mono, monospace", fontWeight: 500, color: b.rate >= 70 ? "var(--green)" : b.rate >= 40 ? "var(--amber)" : "var(--red)" }}>{b.rate}%</span>
               </div>
               <ProgressBar pct={b.rate} color={b.color} />
             </div>
