@@ -3329,10 +3329,10 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
               <span style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:dbStatus==="ok"?"#059669":dbStatus==="loading"?"#2563EB":"#DC2626",fontWeight:600,letterSpacing:.5}}>{dbStatus==="ok"?"CLOUD":dbStatus==="loading"?"SYNC...":"LOCAL"}</span>
             </div>
             {stats.overdue>0&&<button onClick={()=>setView("warroom")} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",background:"rgba(220,38,38,.1)",border:"1px solid rgba(220,38,38,.3)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"#DC2626",cursor:"pointer",fontWeight:600}}>⚔ WAR ROOM <span style={{background:"#DC2626",color:"#fff",borderRadius:99,padding:"0 5px",fontSize:7.5,marginLeft:2}}>{stats.overdue}</span></button>}
-            <button onClick={()=>{generateNarrative();}} title="Your week as a story" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>📖 Story</button>
-            <button onClick={()=>{generateProfile();}} title="Productivity Profile" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>🧬 Profile</button>
-            <button onClick={()=>setRadioMode(true)} title="PRODASH Radio — ambient focus mode" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>📻 Radio</button>
-            <button onClick={()=>setShowWhatIf(true)} title="What-If Simulator" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>🔮 What-If</button>
+            <button onClick={()=>{generateNarrative();}} title="Your week as a story" className="topbar-hide-mob" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>📖 Story</button>
+            <button onClick={()=>{generateProfile();}} title="Productivity Profile" className="topbar-hide-mob" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>🧬 Profile</button>
+            <button onClick={()=>setRadioMode(true)} title="PRODASH Radio — ambient focus mode" className="topbar-hide-mob" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>📻 Radio</button>
+            <button onClick={()=>setShowWhatIf(true)} title="What-If Simulator" className="topbar-hide-mob" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>🔮 What-If</button>
             <button onClick={startVoice} title="Voice capture" style={{padding:"4px 10px",background:voiceActive?"rgba(220,38,38,.15)":"transparent",border:`1px solid ${voiceActive?"rgba(220,38,38,.5)":"var(--line)"}`,borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:voiceActive?"#DC2626":"var(--ink-3)",cursor:"pointer"}}>🎤 {voiceActive?"…":""}</button>
             <LiveClock/>
             <div className="topbar-dot" style={{background:"#4ADE80",boxShadow:"0 0 8px #4ADE80"}}/>
@@ -3341,7 +3341,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
 
         {/* Quick add bar */}
         {(view==="dashboard"||view==="brand"||view==="goals"||view==="weekplan")&&(
-          <div style={{background:"var(--ai-bg)",borderBottom:"1px solid var(--ai-border)",padding:"8px 26px",display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
+          <div className="quick-add-bar" style={{background:"var(--ai-bg)",borderBottom:"1px solid var(--ai-border)",padding:"8px 26px",display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
             <span style={{fontFamily:"Martian Mono,monospace",fontSize:7.5,color:"var(--indigo)",letterSpacing:2,textTransform:"uppercase",whiteSpace:"nowrap"}}>QUICK ADD</span>
             <input className="inp" style={{flex:1,maxWidth:420,padding:"6px 12px",fontSize:12.5,background:"rgba(255,255,255,.7)",border:"1px solid var(--ai-border)"}}
               placeholder={`New task${currentBrand?" for "+currentBrand.name:""}... press Enter to add`}
@@ -3369,7 +3369,28 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
         </div>
       </div>
 
-      {showTaskModal    &&<TaskModal onSave={addTask} onClose={()=>setShowTaskModal(false)} brandId={activeBrand} tab={brandTab} brands={BRANDS}/>}
+      {/* ── MOBILE BOTTOM NAV ── */}
+      <nav className="mobile-nav">
+        <button className={`mob-nav-btn${view==="dashboard"&&!activeBrand?" active":""}`} onClick={()=>{setView("dashboard");setActiveBrand(null);setSidebarOpen(false);}}>
+          <span>◈</span><span>Home</span>
+        </button>
+        <button className={`mob-nav-btn${view==="warroom"?" active":""}`} onClick={()=>{setView("warroom");setActiveBrand(null);}}>
+          <span>⚔</span><span>War Room</span>
+          {stats.overdue>0&&<span style={{position:"absolute",top:6,right:8,width:8,height:8,background:"#DC2626",borderRadius:"50%"}}/>}
+        </button>
+        <button className="mob-nav-btn" onClick={()=>setShowTaskModal(true)} style={{position:"relative"}}>
+          <span style={{fontSize:26,lineHeight:1,background:"var(--blue)",color:"#fff",borderRadius:"50%",width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",marginTop:-12,boxShadow:"0 4px 14px rgba(37,99,235,.4)"}}>+</span>
+          <span>Add</span>
+        </button>
+        <button className={`mob-nav-btn${view==="ai"?" active":""}`} onClick={()=>{setView("ai");setActiveBrand(null);}}>
+          <span>◎</span><span>AI</span>
+        </button>
+        <button className="mob-nav-btn" onClick={()=>setSidebarOpen(true)}>
+          <span>☰</span><span>More</span>
+        </button>
+      </nav>
+
+            {showTaskModal    &&<TaskModal onSave={addTask} onClose={()=>setShowTaskModal(false)} brandId={activeBrand} tab={brandTab} brands={BRANDS}/>}
       {showPinModal     &&<PinModal onSave={addNote} onClose={()=>setShowPinModal(false)}/>}
       {showReminderModal&&<ReminderModal onSave={addReminder} onClose={()=>setShowReminderModal(false)} defaultDate={reminderDate}/>}
       {showAIGen&&<AIGenModal onAddTasks={(forms)=>forms.forEach(f=>addTask(f))} onClose={()=>setShowAIGen(false)} brandId={activeBrand||"goldbet"} tab={brandTab} apiKey={API_KEY}/>}
