@@ -698,6 +698,7 @@ export default function App() {
   const [focusRunning,setFocusRunning] = useState(false);
   const [focusStarted,setFocusStarted] = useState(null);
   const [showConfetti,setShowConfetti] = useState(false);
+  const [taskLightbox,setTaskLightbox] = useState(null);
   const [showAIGen,setShowAIGen]   = useState(false);
   const [showTemplates,setShowTemplates] = useState(false);
   const [streak,setStreak]         = useState(loadStreak);
@@ -1512,7 +1513,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
               <div style={{display:"flex",gap:5,marginTop:6,flexWrap:"wrap"}}>
                 {t.attachments.map(a=>(
                   <div key={a.id} style={{borderRadius:5,overflow:"hidden",border:"1px solid var(--line)",cursor:a.type.startsWith("image/")?"pointer":"default",fontSize:11,position:"relative"}}
-                    onClick={()=>a.type.startsWith("image/")&&setLightbox({data:a.data,name:a.name})}>
+                    onClick={()=>a.type.startsWith("image/")&&setTaskLightbox({data:a.data,name:a.name})}>
                     {a.type.startsWith("image/")?<img src={a.data} alt={a.name} style={{height:48,width:48,objectFit:"cover",display:"block"}}/>:<span style={{padding:"4px 7px",display:"block",color:"var(--ink-3)"}}>📄 {a.name.slice(0,15)}</span>}
                     {a.type.startsWith("image/")&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0)",transition:"background .15s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(0,0,0,.35)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0)"}><span style={{color:"#fff",fontSize:14,opacity:0,transition:"opacity .15s"}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=0}>🔍</span></div>}
                   </div>
@@ -2259,13 +2260,13 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
       {showGlobalSearch &&<GlobalSearch data={data} onClose={()=>setShowGlobalSearch(false)} onNavigate={(v,b)=>{setView(v);if(b)setActiveBrand(b);}}/>}
       {showShortcuts    &&<ShortcutsModal onClose={()=>setShowShortcuts(false)}/>}
       {/* Global lightbox for task attachments */}
-      {lightbox&&(
-        <div onClick={()=>setLightbox(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.9)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:24,cursor:"zoom-out"}}>
+      {taskLightbox&&(
+        <div onClick={()=>setTaskLightbox(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.92)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:24,cursor:"zoom-out"}}>
           <div onClick={e=>e.stopPropagation()} style={{position:"relative",maxWidth:"92vw",maxHeight:"92vh"}}>
-            <img src={lightbox.data} alt={lightbox.name} style={{maxWidth:"92vw",maxHeight:"88vh",borderRadius:10,boxShadow:"0 20px 80px rgba(0,0,0,.7)",display:"block",objectFit:"contain"}}/>
-            <div style={{position:"absolute",bottom:-36,left:0,right:0,textAlign:"center",fontFamily:"Martian Mono,monospace",fontSize:10,color:"rgba(255,255,255,.4)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lightbox.name}</div>
-            <button onClick={()=>setLightbox(null)} style={{position:"absolute",top:-14,right:-14,background:"#fff",border:"none",borderRadius:"50%",width:32,height:32,fontSize:13,cursor:"pointer",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 12px rgba(0,0,0,.4)"}}>✕</button>
-            <a href={lightbox.data} download={lightbox.name} onClick={e=>e.stopPropagation()} style={{position:"absolute",top:-14,right:26,background:"#2563EB",border:"none",borderRadius:"50%",width:32,height:32,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none",boxShadow:"0 2px 12px rgba(0,0,0,.4)"}}>⬇</a>
+            <img src={taskLightbox.data} alt={taskLightbox.name} style={{maxWidth:"92vw",maxHeight:"88vh",borderRadius:10,boxShadow:"0 20px 80px rgba(0,0,0,.7)",display:"block",objectFit:"contain"}}/>
+            <div style={{position:"absolute",bottom:-36,left:0,right:0,textAlign:"center",fontFamily:"Martian Mono,monospace",fontSize:10,color:"rgba(255,255,255,.4)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{taskLightbox.name}</div>
+            <button onClick={()=>setTaskLightbox(null)} style={{position:"absolute",top:-14,right:-14,background:"#fff",border:"none",borderRadius:"50%",width:32,height:32,fontSize:13,cursor:"pointer",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 12px rgba(0,0,0,.4)"}}>✕</button>
+            <a href={taskLightbox.data} download={taskLightbox.name} onClick={e=>e.stopPropagation()} style={{position:"absolute",top:-14,right:26,background:"#2563EB",border:"none",borderRadius:"50%",width:32,height:32,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none",boxShadow:"0 2px 12px rgba(0,0,0,.4)"}}>⬇</a>
           </div>
         </div>
       )}
