@@ -19,11 +19,26 @@ const RECURRENCE  = [{key:"",label:"None"},{key:"daily",label:"Daily"},{key:"wee
 const PIN_COLORS  = ["#FFF9C4","#FFEEBA","#FFE0E0","#E0F4E0","#E0E8FF","#F3E8FF","#FFF0E0","#E0F8F8"];
 const MONTHS      = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const WEEKDAYS    = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-const STORAGE_KEY = "prodash_v5";
+const STORAGE_KEY = "prodash_v6";
 const KANBAN_COLS = ["todo","inprogress","done"];
 const KANBAN_LABELS = {todo:"To Do",inprogress:"In Progress",done:"Done"};
+const POMODORO_MINS = 25;
+const healthGrade = (rate, overdue, total) => {
+  if(!total) return {grade:"—",color:"#9099B8",label:"No data"};
+  const s = Math.max(0, rate - (overdue * 15));
+  if(s>=85) return {grade:"A",color:"#059669",label:"Excellent"};
+  if(s>=70) return {grade:"B",color:"#2563EB",label:"Good"};
+  if(s>=50) return {grade:"C",color:"#D97706",label:"Fair"};
+  if(s>=30) return {grade:"D",color:"#F97316",label:"Poor"};
+  return {grade:"F",color:"#DC2626",label:"Critical"};
+};
+const taskAgeDays = (createdAt) => (Date.now() - new Date(createdAt)) / 86400000;
+const fmtSecs = s => { const m=Math.floor(s/60),ss=s%60; return String(m).padStart(2,"0")+":"+String(ss).padStart(2,"0"); };
+const loadStreak = () => { try{return JSON.parse(localStorage.getItem("prodash_streak")||"{}")||{};}catch{return{};} };
+const saveStreakLS = s => localStorage.setItem("prodash_streak", JSON.stringify(s));
 const NAV_ITEMS = [
   {id:"dashboard",icon:"◈",label:"Dashboard"},
+  {id:"warroom",  icon:"⚔",label:"War Room"},
   {id:"timelog",  icon:"◷",label:"Time Log"},
   {id:"analytics",icon:"◉",label:"Analytics"},
   {id:"calendar", icon:"◫",label:"Calendar"},
@@ -41,6 +56,8 @@ const LOG_TYPES = {
   timer_stop:   {color:"#059669",label:"Timer Stopped"},
   session_start:{color:"#6B7280",label:"Session"},
   ai_insight:   {color:"#4F46E5",label:"AI Insight"},
+  bulk_action:  {color:"#F59E0B",label:"Bulk Action"},
+  recurring:    {color:"#059669",label:"Recurring"},
   recurring:    {color:"#059669",label:"Recurring"},
 };
 
@@ -57,7 +74,7 @@ const sbLoad = async () => {
     const rows = await res.json();
     if (rows&&rows[0]?.data) {
       const p=rows[0].data;
-      return {tasks:p.tasks||{},notes:p.notes||[],reminders:p.reminders||[],uploads:p.uploads||{},timelog:p.timelog||[],aiInsights:p.aiInsights||{},meta:p.meta||{createdAt:nowISO()}};
+      return {tasks:p.tasks||{},notes:p.notes||[],reminders:p.reminders||[],uploads:p.uploads||{},timelog:p.timelog||[],aiInsights:p.aiInsights||{},templates:p.templates||[],meta:p.meta||{createdAt:nowISO()}};
     }
     return emptyData();
   } catch { return emptyData(); }
@@ -82,8 +99,8 @@ const fmtDate     = (d) => d?new Date(d).toLocaleDateString("en-GB",{day:"2-digi
 const fmtTime     = (d) => d?new Date(d).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"";
 const fmtDateTime = (d) => d?`${fmtDate(d)} ${fmtTime(d)}`:"";
 const fmtDur      = (ms) => { if(!ms||ms<0) return "0m"; const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000); return h?`${h}h ${m}m`:`${m}m`; };
-const emptyData   = () => ({tasks:{},notes:[],reminders:[],uploads:{},timelog:[],aiInsights:{},meta:{createdAt:nowISO()}});
-const loadLocal   = () => { try{const r=localStorage.getItem(STORAGE_KEY); if(!r) return emptyData(); const p=JSON.parse(r); return {tasks:p.tasks||{},notes:p.notes||[],reminders:p.reminders||[],uploads:p.uploads||{},timelog:p.timelog||[],aiInsights:p.aiInsights||{},meta:p.meta||{createdAt:nowISO()}};} catch{return emptyData();}};
+const emptyData   = () => ({tasks:{},notes:[],reminders:[],uploads:{},timelog:[],aiInsights:{},templates:[],meta:{createdAt:nowISO()}});
+const loadLocal   = () => { try{const r=localStorage.getItem(STORAGE_KEY); if(!r) return emptyData(); const p=JSON.parse(r); return {tasks:p.tasks||{},notes:p.notes||[],reminders:p.reminders||[],uploads:p.uploads||{},timelog:p.timelog||[],aiInsights:p.aiInsights||{},templates:p.templates||[],meta:p.meta||{createdAt:nowISO()}};} catch{return emptyData();}};
 const saveLocal   = (d) => { try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} };
 
 // ══════════════════════════════════════════════════════════
@@ -97,6 +114,197 @@ function useToast() {
     setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3500);
   },[]);
   return {toasts,show};
+}
+
+// ══════════════════════════════════════════════════════════
+//  CONFETTI
+// ══════════════════════════════════════════════════════════
+function Confetti() {
+  const pts = Array.from({length:80},(_,i)=>({
+    id:i, x:Math.random()*100,
+    color:["#2563EB","#059669","#D97706","#7C3AED","#DC2626","#F59E0B","#EC4899"][Math.floor(Math.random()*7)],
+    delay:Math.random()*0.6, dur:1.4+Math.random()*1.2, size:5+Math.random()*8, shape:Math.random()>0.5?"50%":"3px",
+  }));
+  return (
+    <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:1000,overflow:"hidden"}}>
+      {pts.map(p=>(
+        <div key={p.id} style={{position:"absolute",left:p.x+"%",top:-20,width:p.size,height:p.size,
+          background:p.color,borderRadius:p.shape,
+          animation:`confetti-fall ${p.dur}s ${p.delay}s ease-in forwards`}}/>
+      ))}
+      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+        <div style={{fontSize:56,animation:"confetti-pop .5s ease-out"}}>🎉</div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+//  FOCUS MODE OVERLAY
+// ══════════════════════════════════════════════════════════
+function FocusOverlay({task,secs,running,onToggle,onReset,onDone,onExit,elapsed}) {
+  const total=POMODORO_MINS*60, pct=((total-secs)/total)*100;
+  const r=58, circ=2*Math.PI*r;
+  const finished=secs===0;
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(5,6,15,.97)",zIndex:200,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:32}}>
+      <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"rgba(255,255,255,.25)",letterSpacing:4,marginBottom:28,textTransform:"uppercase"}}>PRODASH · FOCUS MODE · POMODORO</div>
+      <div style={{position:"relative",width:168,height:168,marginBottom:28}}>
+        <svg width={168} height={168} style={{transform:"rotate(-90deg)"}}>
+          <circle cx={84} cy={84} r={r} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth={9}/>
+          <circle cx={84} cy={84} r={r} fill="none" stroke={finished?"#059669":"#2563EB"} strokeWidth={9}
+            strokeDasharray={circ} strokeDashoffset={circ-(circ*pct/100)} strokeLinecap="round"
+            style={{transition:"stroke-dashoffset .6s"}}/>
+        </svg>
+        <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+          <div style={{fontFamily:"Martian Mono,monospace",fontSize:36,fontWeight:700,color:"#fff",letterSpacing:-2,lineHeight:1}}>{fmtSecs(secs)}</div>
+          <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"rgba(255,255,255,.25)",letterSpacing:2,marginTop:6}}>{finished?"COMPLETE!":running?"FOCUSING":"PAUSED"}</div>
+        </div>
+      </div>
+      <div style={{textAlign:"center",maxWidth:440,marginBottom:28}}>
+        <div style={{fontSize:11,color:"rgba(255,255,255,.3)",letterSpacing:2,fontFamily:"Martian Mono,monospace",marginBottom:8,textTransform:"uppercase"}}>Current Task</div>
+        <div style={{fontSize:20,fontWeight:600,color:"#fff",lineHeight:1.4}}>{task.title}</div>
+        {elapsed>5000&&<div style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:"rgba(255,255,255,.3)",marginTop:8}}>Time invested: {fmtDur(elapsed)}</div>}
+      </div>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",justifyContent:"center"}}>
+        {!finished&&<button onClick={onToggle} style={{padding:"11px 28px",background:running?"rgba(255,255,255,.1)":"#2563EB",border:"none",borderRadius:10,color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}}>{running?"⏸ Pause":"▶ Start"}</button>}
+        {!finished&&<button onClick={onReset} style={{padding:"11px 18px",background:"rgba(255,255,255,.07)",border:"none",borderRadius:10,color:"rgba(255,255,255,.5)",fontSize:14,cursor:"pointer"}}>↺ Reset</button>}
+        {finished&&<button onClick={()=>onDone(true)} style={{padding:"11px 32px",background:"#059669",border:"none",borderRadius:10,color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}}>✓ Mark Done & Log</button>}
+        <button onClick={()=>onDone(false)} style={{padding:"11px 18px",background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,color:"rgba(255,255,255,.45)",fontSize:13,cursor:"pointer"}}>
+          {elapsed>5000?"Log Time & Exit":"Exit"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+//  AI TASK GENERATOR MODAL
+// ══════════════════════════════════════════════════════════
+function AIGenModal({onAddTasks,onClose,brandId,tab,apiKey}) {
+  const [prompt,setPrompt]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [preview,setPreview]=useState(null);
+  const [err,setErr]=useState("");
+
+  const generate=async()=>{
+    if(!prompt.trim()) return;
+    setLoading(true); setErr(""); setPreview(null);
+    try {
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:900,
+          system:`You plan tasks for a professional managing betting/gaming brands. Return ONLY a JSON array. No markdown, no backticks.
+Each item: {"title":"string","priority":"medium","category":"Reporting","estimatedMins":30,"note":"string"}
+priority: low|medium|high|urgent. category: Reporting|Compliance|Accounting|Payroll. 5-12 tasks.`,
+          messages:[{role:"user",content:"Break this into specific tasks: "+prompt}]})});
+      const json=await res.json();
+      const text=json.content?.filter(c=>c.type==="text").map(c=>c.text).join("")||"";
+      const tasks=JSON.parse(text.replace(/```json|```/g,"").trim());
+      if(!Array.isArray(tasks)) throw new Error("not array");
+      setPreview(tasks);
+    } catch { setErr("Could not generate — try rephrasing."); }
+    setLoading(false);
+  };
+
+  const confirm=()=>{
+    onAddTasks(preview.map(t=>({...t,brand:brandId,tab,due:"",recurrence:"",kanbanStatus:"todo",attachments:[]})));
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal-box" style={{maxWidth:540}}>
+        <div className="modal-title"><span>◎ AI TASK GENERATOR</span><button className="modal-close" onClick={onClose}>✕</button></div>
+        <div style={{fontSize:12.5,color:"var(--ink-3)",marginBottom:14,lineHeight:1.65}}>Describe a project or process in plain English — AI breaks it into specific tasks instantly.</div>
+        {!preview?(
+          <>
+            <textarea className="ta" style={{minHeight:80}} autoFocus
+              placeholder={"e.g. \"Month-end compliance review for all brands\" or \"Q2 reporting pack for Goldbet\""}
+              value={prompt} onChange={e=>setPrompt(e.target.value)}
+              onKeyDown={e=>{if(e.key==="Enter"&&e.ctrlKey)generate();}}/>
+            <div style={{fontSize:10.5,color:"var(--ink-4)",marginBottom:10}}>Ctrl+Enter to generate</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
+              {["Month-end reporting pack","Compliance audit checklist","Payroll reconciliation","Regulatory submission","Brand performance review","Accounting close process"].map(s=>(
+                <span key={s} onClick={()=>setPrompt(s)} style={{fontSize:11,padding:"3px 10px",background:"var(--surface)",borderRadius:99,cursor:"pointer",color:"var(--ink-3)",border:"1px solid var(--line)"}}>{s}</span>
+              ))}
+            </div>
+            {err&&<div style={{color:"#DC2626",fontSize:12,marginBottom:10}}>{err}</div>}
+            <div className="row gap8">
+              <button className="btn btn-primary flex1" onClick={generate} disabled={loading||!prompt.trim()}>
+                {loading?<span style={{display:"flex",alignItems:"center",gap:8}}><span className="typing-dots"><span/><span/><span/></span> Generating...</span>:"◎ Generate Tasks"}
+              </button>
+              <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+            </div>
+          </>
+        ):(
+          <>
+            <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--indigo)",letterSpacing:1.5,marginBottom:10,textTransform:"uppercase"}}>◎ {preview.length} TASKS GENERATED — REVIEW BEFORE ADDING</div>
+            <div style={{maxHeight:280,overflowY:"auto",marginBottom:14}}>
+              {preview.map((t,i)=>(
+                <div key={i} style={{display:"flex",gap:10,padding:"9px 12px",borderRadius:8,background:"var(--surface)",marginBottom:6,alignItems:"flex-start"}}>
+                  <span style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--ink-4)",marginTop:3,flexShrink:0}}>{String(i+1).padStart(2,"0")}</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:500,color:"var(--ink)",marginBottom:4}}>{t.title}</div>
+                    <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                      <span className={`badge ${t.priority==="urgent"?"badge-violet":t.priority==="high"?"badge-red":t.priority==="medium"?"badge-amber":"badge-green"}`}>{t.priority}</span>
+                      {t.category&&<span className="badge badge-gray">{t.category}</span>}
+                      {t.estimatedMins&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--ink-4)"}}>~{t.estimatedMins}m</span>}
+                    </div>
+                    {t.note&&<div style={{fontSize:11,color:"var(--ink-4)",marginTop:3}}>{t.note}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="row gap8">
+              <button className="btn btn-primary flex1" onClick={confirm}>✓ Add All {preview.length} Tasks</button>
+              <button className="btn btn-ghost" onClick={()=>setPreview(null)}>← Regen</button>
+              <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+//  TEMPLATES MODAL
+// ══════════════════════════════════════════════════════════
+function TemplatesModal({templates,onSave,onDeploy,onDelete,onClose,activeBrand,activeTab}) {
+  const [name,setName]=useState("");
+  const [deployTarget,setDeployTarget]=useState({brand:activeBrand||"goldbet",tab:activeTab||"Reporting"});
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal-box" style={{maxWidth:500}}>
+        <div className="modal-title"><span>📋 SMART TEMPLATES</span><button className="modal-close" onClick={onClose}>✕</button></div>
+        <div style={{fontSize:12,color:"var(--ink-3)",marginBottom:14}}>Save your current tasks as a template. Deploy to any brand instantly.</div>
+        <div style={{display:"flex",gap:8,marginBottom:16}}>
+          <input className="inp" style={{flex:1}} placeholder="Template name..." value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&name.trim()&&onSave(activeBrand,activeTab,name.trim())&&setName("")}/>
+          <button className="btn btn-primary btn-sm" onClick={()=>{if(name.trim()){onSave(activeBrand,activeTab,name.trim());setName("");}}} disabled={!name.trim()}>💾 Save Current</button>
+        </div>
+        {!templates?.length&&<div style={{textAlign:"center",padding:"20px 0",color:"var(--ink-4)",fontSize:12}}>No templates yet</div>}
+        {(templates||[]).map(t=>{
+          const brand=BRANDS.find(b=>b.id===t.brandId);
+          return (
+            <div key={t.id} style={{display:"flex",gap:10,padding:"11px 14px",border:"1px solid var(--line)",borderRadius:10,marginBottom:8,alignItems:"center",background:"var(--surface)"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{t.name}</div>
+                <div style={{fontSize:11,color:"var(--ink-4)",marginTop:3}}>{brand?.emoji} {brand?.name} · {t.tab} · {t.tasks.length} tasks · {fmtDate(t.createdAt)}</div>
+              </div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <select className="sel" style={{fontSize:10.5,padding:"4px 6px",width:90}} value={deployTarget.brand} onChange={e=>setDeployTarget(p=>({...p,brand:e.target.value}))}>
+                  {BRANDS.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+                <button className="btn btn-primary btn-xs" onClick={()=>{onDeploy(t,deployTarget.brand,deployTarget.tab);onClose();}}>▶ Deploy</button>
+                <button className="task-del" style={{opacity:1}} onClick={()=>onDelete(t.id)}>✕</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 // ══════════════════════════════════════════════════════════
@@ -434,7 +642,7 @@ function ShortcutsModal({onClose}) {
     ["N","New task (on dashboard/brand)"],
     ["Escape","Close any modal"],
     ["Enter","Submit form / quick add task"],
-    ["D","Go to Dashboard"],
+    ["D","Dashboard"],["W","Toggle War Room"],["F","Focus mode (AI page)"],
     ["A","Go to AI Assistant"],
     ["T","Toggle dark/light mode"],
   ];
@@ -484,9 +692,21 @@ export default function App() {
   const [darkMode,setDarkMode]    = useState(()=>localStorage.getItem("prodash_dark")==="1");
   const [notifPerm,setNotifPerm]  = useState("default");
   const [activeAlerts,setActiveAlerts] = useState([]);
+  const [selectedTasks,setSelectedTasks] = useState(new Set());
+  const [focusMode,setFocusMode]   = useState(null); // {task, key}
+  const [focusSecs,setFocusSecs]   = useState(POMODORO_MINS*60);
+  const [focusRunning,setFocusRunning] = useState(false);
+  const [focusStarted,setFocusStarted] = useState(null);
+  const [showConfetti,setShowConfetti] = useState(false);
+  const [showAIGen,setShowAIGen]   = useState(false);
+  const [showTemplates,setShowTemplates] = useState(false);
+  const [streak,setStreak]         = useState(loadStreak);
+  const prevRates = useRef({});
+  const focusTimer = useRef(null);
   const chatEndRef  = useRef(null);
   const saveTimer   = useRef(null);
   const notifTimer  = useRef(null);
+  const confettiTimer = useRef(null);
   const {toasts,show:showToast} = useToast();
   const API_KEY = ["sk-ant-api03-VoyKgpprTtpngkF82LLonW2vPR1dpkHWqVOY35FG06LKuVPJj6vGpmZY4Ef25-lsykGlFwWw1HCb1LV8qmfv0g","hc3LgwAA"].join("-");
 
@@ -522,6 +742,61 @@ export default function App() {
 
   // ── Session log ──
   useEffect(()=>{addLog("session_start","Session started",null,null,null);},[]);
+
+  // ── Streak save ──
+  useEffect(()=>{ saveStreakLS(streak); },[streak]);
+
+  // ── Confetti: detect brand hitting 100% ──
+  useEffect(()=>{
+    const bs = getBrandStatsRaw();
+    bs.forEach(b=>{
+      const prev = prevRates.current[b.id];
+      if(prev!==undefined && prev<100 && b.rate===100 && b.tasks>0){
+        setShowConfetti(true);
+        showToast("🎉 "+b.name+" hit 100%!");
+        clearTimeout(confettiTimer.current);
+        confettiTimer.current = setTimeout(()=>setShowConfetti(false), 3800);
+      }
+      prevRates.current[b.id] = b.rate;
+    });
+  // eslint-disable-next-line
+  },[data.tasks]);
+
+  // ── Recurring tasks ──
+  useEffect(()=>{
+    const today=todayStr(); const lastCheck=localStorage.getItem("prodash_recur_check");
+    if(lastCheck===today) return;
+    localStorage.setItem("prodash_recur_check",today);
+    const now=new Date();
+    setData(p=>{
+      let changed=false; const newTasks={...p.tasks};
+      Object.entries(newTasks).forEach(([key,tasks])=>{
+        tasks.forEach(t=>{
+          if(!t.recurrence||!t.done) return;
+          const doneDate=new Date(t.doneAt||t.createdAt); let next=new Date(doneDate);
+          if(t.recurrence==="daily") next.setDate(next.getDate()+1);
+          else if(t.recurrence==="weekly") next.setDate(next.getDate()+7);
+          else if(t.recurrence==="monthly") next.setMonth(next.getMonth()+1);
+          if(next<=now){
+            const nt={...t,id:uid(),done:false,doneAt:null,createdAt:nowISO(),due:next.toISOString().split("T")[0],timeSpent:0};
+            newTasks[key]=[...newTasks[key],nt]; changed=true;
+          }
+        });
+      });
+      return changed?{...p,tasks:newTasks}:p;
+    });
+  // eslint-disable-next-line
+  },[]);
+
+  // ── Focus/Pomodoro timer tick ──
+  useEffect(()=>{
+    if(focusRunning){
+      focusTimer.current=setInterval(()=>{
+        setFocusSecs(s=>{ if(s<=1){clearInterval(focusTimer.current);setFocusRunning(false);showToast("🎯 Pomodoro done! Take a break.");return 0;} return s-1; });
+      },1000);
+    } else clearInterval(focusTimer.current);
+    return()=>clearInterval(focusTimer.current);
+  },[focusRunning]);
 
   // ── Auto AI briefing on load ──
   useEffect(()=>{
@@ -610,6 +885,8 @@ export default function App() {
       if(e.key==="d"||e.key==="D"){setView("dashboard");setActiveBrand(null);return;}
       if(e.key==="a"||e.key==="A"){setView("ai");setActiveBrand(null);return;}
       if(e.key==="t"||e.key==="T"){setDarkMode(p=>!p);return;}
+      if(e.key==="w"||e.key==="W"){setView(v=>v==="warroom"?"dashboard":"warroom");setActiveBrand(null);return;}
+      if(e.key==="f"||e.key==="F"){setView("ai");setActiveBrand(null);return;}
       if(e.key==="?"){setShowShortcuts(true);return;}
     };
     window.addEventListener("keydown",handler);
@@ -628,6 +905,16 @@ export default function App() {
     const entry={id:uid(),ts:nowISO(),type,title,brand,brandTab,detail};
     setData(p=>({...p,timelog:[entry,...(p.timelog||[])].slice(0,500)}));
   },[]);
+
+  // ── STATS (raw sync — no deps array, called inline) ──
+  const getBrandStatsRaw = () => BRANDS.map(b=>{
+    const tasks=Object.entries(data.tasks).filter(([k])=>k.startsWith(b.id)).flatMap(([,v])=>v);
+    const done=tasks.filter(t=>t.done).length;
+    const overdue=tasks.filter(t=>!t.done&&t.due&&t.due<todayStr()).length;
+    const timeSpent=tasks.reduce((s,t)=>s+(t.timeSpent||0),0);
+    const rate=tasks.length?Math.round(done/tasks.length*100):0;
+    return {...b,tasks:tasks.length,done,pending:tasks.length-done,overdue,rate,timeSpent,hg:healthGrade(rate,overdue,tasks.length)};
+  });
 
   // ── STATS ──
   const getStats=useCallback(()=>{
@@ -650,7 +937,8 @@ export default function App() {
     const done=tasks.filter(t=>t.done).length;
     const overdue=tasks.filter(t=>!t.done&&t.due&&t.due<todayStr()).length;
     const timeSpent=tasks.reduce((s,t)=>s+(t.timeSpent||0),0);
-    return {...b,tasks:tasks.length,done,pending:tasks.length-done,overdue,rate:tasks.length?Math.round(done/tasks.length*100):0,timeSpent};
+    const rate=tasks.length?Math.round(done/tasks.length*100):0;
+    return {...b,tasks:tasks.length,done,pending:tasks.length-done,overdue,rate,timeSpent,hg:healthGrade(rate,overdue,tasks.length)};
   }),[data.tasks]);
 
   const getScore=useCallback(()=>{
@@ -679,6 +967,15 @@ export default function App() {
       const tasks=(p.tasks[key]||[]).map(t=>{
         if(t.id!==id) return t;
         const done=!t.done;
+        if(done){
+          setStreak(s=>{
+            const today=todayStr(); const dates=new Set(s.dates||[]);
+            dates.add(today); const arr=[...dates].sort();
+            let cur=0; let d=new Date();
+            for(let i=0;i<365;i++){const ds=d.toISOString().split('T')[0]; if(dates.has(ds)){cur++;d.setDate(d.getDate()-1);}else if(i===0){d.setDate(d.getDate()-1);}else break;}
+            return{dates:arr.slice(-365),current:cur,best:Math.max(s.best||0,cur),lastDate:today};
+          });
+        }
         return {...t,done,doneAt:done?nowISO():null,kanbanStatus:done?"done":t.kanbanStatus==="done"?"todo":t.kanbanStatus};
       });
       const task=tasks.find(t=>t.id===id);
@@ -736,6 +1033,67 @@ export default function App() {
     setData(p=>({...p,reminders:p.reminders.filter(r=>r.id!==id)}));
     showToast("Reminder removed","warning");
   },[showToast]);
+
+  // ── Bulk actions ──
+  const bulkComplete=useCallback((key,ids)=>{
+    setData(p=>{const tasks=(p.tasks[key]||[]).map(t=>ids.has(t.id)?{...t,done:true,doneAt:nowISO(),kanbanStatus:"done"}:t);return{...p,tasks:{...p.tasks,[key]:tasks}};});
+    addLog("bulk_action",`Bulk completed ${ids.size} tasks`,activeBrand,brandTab,"");
+    showToast(ids.size+" tasks completed"); setSelectedTasks(new Set());
+  },[addLog,activeBrand,brandTab,showToast]);
+
+  const bulkDelete=useCallback((key,ids)=>{
+    setData(p=>({...p,tasks:{...p.tasks,[key]:(p.tasks[key]||[]).filter(t=>!ids.has(t.id))}}));
+    addLog("bulk_action",`Bulk deleted ${ids.size} tasks`,activeBrand,brandTab,"");
+    showToast(ids.size+" tasks deleted","warning"); setSelectedTasks(new Set());
+  },[addLog,activeBrand,brandTab,showToast]);
+
+  // ── Templates ──
+  const saveTemplate=useCallback((brand,tab,name)=>{
+    const key=brand+"_"+tab;
+    const tasks=(data.tasks[key]||[]).filter(t=>!t.done).map(({id,done,createdAt,doneAt,timeSpent,...t})=>t);
+    if(!tasks.length){showToast("No pending tasks to save","warning");return;}
+    const tpl={id:uid(),name,brandId:brand,tab,createdAt:nowISO(),tasks};
+    setData(p=>({...p,templates:[...(p.templates||[]),tpl]}));
+    showToast("Template \""+name+"\" saved ("+tasks.length+" tasks)");
+  },[data.tasks,showToast]);
+
+  const deployTemplate=useCallback((tpl,targetBrand,targetTab)=>{
+    const key=targetBrand+"_"+targetTab;
+    const tasks=tpl.tasks.map(t=>({...t,id:uid(),done:false,doneAt:null,createdAt:nowISO(),timeSpent:0,attachments:[]}));
+    setData(p=>({...p,tasks:{...p.tasks,[key]:[...(p.tasks[key]||[]),...tasks]}}));
+    showToast("Deployed "+tasks.length+" tasks from \""+tpl.name+"\"");
+  },[showToast]);
+
+  const deleteTemplate=useCallback((id)=>{
+    setData(p=>({...p,templates:(p.templates||[]).filter(t=>t.id!==id)}));
+    showToast("Template deleted","warning");
+  },[showToast]);
+
+  // ── CSV export ──
+  const exportCSV=(brand,tab)=>{
+    const tasks=(data.tasks[brand+"_"+tab]||[]);
+    const hdr=["Title","Priority","Category","Due","Status","Est.Mins","TimeSpent(mins)","Notes"];
+    const rows=tasks.map(t=>["\""+t.title.replace(/"/g,'\"\"')+"\"",t.priority,t.category,t.due,t.done?"Done":"Pending",t.estimatedMins||"",t.timeSpent?Math.round(t.timeSpent/60000):"","\""+((t.note||"").replace(/"/g,'\"\"'))+"\"" ]);
+    const csv=[hdr,...rows].map(r=>r.join(",")).join("\n");
+    const url=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+    const a=document.createElement("a"); a.href=url; a.download=brand+"-"+tab+"-"+todayStr()+".csv"; a.click(); URL.revokeObjectURL(url);
+    showToast("CSV exported");
+  };
+
+  // ── Focus mode actions ──
+  const startFocus=(task,key)=>{
+    setFocusMode({task,key}); setFocusSecs(POMODORO_MINS*60); setFocusRunning(false); setFocusStarted(Date.now());
+  };
+  const endFocus=(markDone)=>{
+    if(!focusMode) return;
+    const elapsed=focusStarted?Date.now()-focusStarted:0;
+    if(elapsed>5000){
+      setData(p=>{const tasks=(p.tasks[focusMode.key]||[]).map(t=>t.id===focusMode.task.id?{...t,timeSpent:(t.timeSpent||0)+elapsed,...(markDone?{done:true,doneAt:nowISO(),kanbanStatus:"done"}:{})}:t);return{...p,tasks:{...p.tasks,[focusMode.key]:tasks}};});
+      addLog("timer_stop","Focus: \""+focusMode.task.title+"\": "+fmtDur(elapsed),activeBrand,brandTab,"");
+      showToast((markDone?"✓ Done! ":"")+"Logged "+fmtDur(elapsed));
+    }
+    setFocusMode(null); setFocusRunning(false); clearInterval(focusTimer.current);
+  };
 
   const exportData=()=>{
     const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
@@ -810,6 +1168,87 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
   // ══════════════════════════════════════════════════════════
   //  DASHBOARD
   // ══════════════════════════════════════════════════════════
+  const renderWarRoom=()=>{
+    const today=todayStr();
+    const allTasks=Object.entries(data.tasks).flatMap(([key,tasks])=>
+      tasks.map(t=>{const[bId,...tp]=key.split("_");const tab=tp.join("_");return{...t,key,brandId:bId,tab,brand:BRANDS.find(b=>b.id===bId)};})
+    );
+    const overdue=allTasks.filter(t=>!t.done&&t.due&&t.due<today).sort((a,b)=>a.due.localeCompare(b.due));
+    const urgent=allTasks.filter(t=>!t.done&&t.priority==="urgent"&&(!t.due||t.due>=today));
+    const stale=allTasks.filter(t=>!t.done&&taskAgeDays(t.createdAt)>7&&t.priority!=="urgent");
+    const critical=overdue.length+urgent.length;
+    return (
+      <div style={{background:"#05060F",minHeight:"100%",padding:"28px 32px"}}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:28}}>
+          <div>
+            <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"rgba(220,38,38,.6)",letterSpacing:4,marginBottom:6,textTransform:"uppercase"}}>PRODASH · COMMAND CENTER</div>
+            <div style={{fontFamily:"Martian Mono,monospace",fontSize:28,fontWeight:700,color:"#fff",letterSpacing:-1,lineHeight:1,marginBottom:5}}>⚔ WAR ROOM</div>
+            <div style={{fontSize:12.5,color:"rgba(255,255,255,.3)"}}>{new Date().toLocaleString("en-GB",{weekday:"long",day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"})}</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontFamily:"Martian Mono,monospace",fontSize:44,fontWeight:700,color:critical>0?"#DC2626":"#059669",lineHeight:1,letterSpacing:-2}}>{critical}</div>
+            <div style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"rgba(255,255,255,.25)",letterSpacing:2,marginTop:3,textTransform:"uppercase"}}>CRITICAL ITEMS</div>
+          </div>
+        </div>
+        {/* Brand health grid */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:8,marginBottom:24}}>
+          {bStats.map(b=>(
+            <div key={b.id} onClick={()=>{setActiveBrand(b.id);setView("brand");}} style={{background:"rgba(255,255,255,.04)",border:`1px solid ${b.overdue>0?"rgba(220,38,38,.4)":"rgba(255,255,255,.07)"}`,borderRadius:10,padding:"12px 10px",cursor:"pointer",transition:"background .15s"}}
+              onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.08)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,.04)"}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                <span style={{fontSize:16}}>{b.emoji}</span>
+                <span style={{fontFamily:"Martian Mono,monospace",fontSize:18,fontWeight:700,color:b.hg?.color||"#9099B8"}}>{b.hg?.grade||"—"}</span>
+              </div>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,fontWeight:600,color:"rgba(255,255,255,.4)",letterSpacing:1,marginBottom:5,textTransform:"uppercase"}}>{b.name}</div>
+              <div style={{height:3,background:"rgba(255,255,255,.08)",borderRadius:99,marginBottom:5}}>
+                <div style={{height:"100%",width:b.rate+"%",background:b.hg?.color||"#9099B8",borderRadius:99}}/>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between"}}>
+                <span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"rgba(255,255,255,.25)"}}>{b.rate}%</span>
+                {b.overdue>0&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"#DC2626",fontWeight:700}}>⚠{b.overdue}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* AI Emergency Brief */}
+        <div style={{background:"rgba(79,70,229,.1)",border:"1px solid rgba(79,70,229,.25)",borderRadius:12,padding:"14px 18px",marginBottom:20}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:insights["warroom"]?10:0}}>
+            <span style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"rgba(79,70,229,.8)",letterSpacing:2,textTransform:"uppercase"}}>◎ AI EMERGENCY ASSESSMENT</span>
+            <button onClick={()=>fetchInsight("warroom","WAR ROOM: "+overdue.length+" overdue, "+urgent.length+" urgent. In 3 sharp sentences: the single biggest risk right now, the 2 most critical tasks, one decisive action. Be brutally direct.")}
+              disabled={insightLoading["warroom"]} style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,padding:"4px 12px",background:"rgba(79,70,229,.25)",border:"1px solid rgba(79,70,229,.4)",borderRadius:6,color:"#A5B4FC",cursor:"pointer"}}>
+              {insightLoading["warroom"]?"Analysing...":"◎ Emergency Brief"}
+            </button>
+          </div>
+          {insightLoading["warroom"]&&<div style={{color:"rgba(165,180,252,.7)",fontSize:12,display:"flex",gap:8,alignItems:"center"}}><span className="typing-dots"><span/><span/><span/></span> Assessing...</div>}
+          {insights["warroom"]&&<div style={{fontSize:13,color:"rgba(255,255,255,.75)",lineHeight:1.75}}>{insights["warroom"]}</div>}
+        </div>
+        {/* Three columns */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
+          {[
+            {label:"OVERDUE",items:overdue,color:"#DC2626",bg:"rgba(220,38,38,.07)",border:"rgba(220,38,38,.2)"},
+            {label:"URGENT",items:urgent,color:"#D97706",bg:"rgba(217,119,6,.07)",border:"rgba(217,119,6,.2)"},
+            {label:"STALE (7+ days)",items:stale.slice(0,8),color:"#F97316",bg:"rgba(249,115,22,.06)",border:"rgba(249,115,22,.15)"},
+          ].map(({label,items,color,bg,border})=>(
+            <div key={label}>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:color+"cc",letterSpacing:2.5,marginBottom:12,textTransform:"uppercase"}}>{label} ({items.length})</div>
+              {!items.length&&<div style={{color:"rgba(255,255,255,.15)",fontSize:12,padding:"12px 0"}}>✓ Clear</div>}
+              {items.slice(0,8).map(t=>(
+                <div key={t.id} onClick={()=>{setActiveBrand(t.brandId);setBrandTab(t.tab);setView("brand");}} style={{background:bg,border:"1px solid "+border,borderRadius:8,padding:"9px 12px",marginBottom:7,cursor:"pointer"}}>
+                  <div style={{fontSize:12.5,fontWeight:500,color:"#fff",marginBottom:5,lineHeight:1.35}}>{t.title}</div>
+                  <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                    <span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:t.brand?.color||"#9099B8"}}>{t.brand?.emoji} {t.brand?.name}</span>
+                    {t.due&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:color+"cc"}}>📅 {fmtDate(t.due)}</span>}
+                    <span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"rgba(255,255,255,.25)"}}>{t.tab}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const renderDashboard=()=>{
     const today=todayStr();
     const allTasks=Object.values(data.tasks).flat();
@@ -945,7 +1384,8 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   <span style={{fontSize:13}}>{b.emoji}</span>
                   <span style={{fontSize:12.5,fontWeight:500,color:b.color}}>{b.name}</span>
-                  {b.overdue>0&&<span className="badge badge-red">{b.overdue} OVR</span>}
+                  {b.overdue>0&&<span className="badge badge-red">{b.overdue}▲</span>}
+                  {b.hg&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:10,fontWeight:700,color:b.hg.color}}>{b.hg.grade}</span>}
                 </div>
                 <span style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:"var(--ink-4)"}}>{b.tasks}</span>
                 <span style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:b.color,fontWeight:500}}>{b.done}</span>
@@ -1041,8 +1481,18 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
     const TaskItem=({t})=>{
       const isOverdue=!t.done&&t.due&&t.due<today;
       const timerRunning=activeTimers[t.id];
+      const isSel=selectedTasks.has(t.id);
+      const ageDays=!t.done?taskAgeDays(t.createdAt):0;
+      const ageColor=ageDays>9?"#DC2626":ageDays>4?"#F97316":ageDays>2?"#D97706":null;
+      const ageLabel=ageDays>9?"💀 STALE":ageDays>4?"🔥 AGING":null;
+      const borderColor=isSel?"#2563EB":isOverdue?"#DC2626":ageColor||undefined;
+      const bgColor=isSel?"rgba(37,99,235,.05)":ageDays>9?"rgba(220,38,38,.04)":ageDays>4?"rgba(249,115,22,.03)":undefined;
       return (
-        <div className={`task-item${t.done?" done":""}`} style={isOverdue?{borderLeftColor:"#DC2626",borderLeftWidth:3}:{}}>
+        <div className={`task-item${t.done?" done":""}`} style={{...(borderColor?{borderLeftColor:borderColor,borderLeftWidth:3}:{}),background:bgColor}}>
+          <div onClick={()=>setSelectedTasks(p=>{const n=new Set(p);n.has(t.id)?n.delete(t.id):n.add(t.id);return n;})}
+            style={{width:16,height:16,borderRadius:4,border:`1.5px solid ${isSel?"#2563EB":"var(--line-2)"}`,background:isSel?"#2563EB":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",marginRight:4,transition:"all .12s"}}>
+            {isSel&&<span style={{color:"#fff",fontSize:9,lineHeight:1}}>✓</span>}
+          </div>
           <div className={`task-cb${t.done?" chk":""}`} onClick={()=>toggleTask(key,t.id)}>{t.done?"✓":""}</div>
           <div style={{flex:1,minWidth:0}}>
             <div className={`task-title${t.done?" done":""}`}>{t.title}</div>
@@ -1051,6 +1501,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
               {t.category&&<span className="badge badge-gray">{t.category}</span>}
               {t.recurrence&&<span className="badge badge-blue">🔁 {t.recurrence}</span>}
               {isOverdue&&<span className="badge badge-red">⚠ OVERDUE</span>}
+              {ageLabel&&!t.done&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:ageColor,fontWeight:600}}>{ageLabel}</span>}
               {t.due&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:isOverdue?"#DC2626":"var(--ink-4)"}}>Due {fmtDate(t.due)}</span>}
               {t.estimatedMins&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:"var(--ink-4)"}}>~{t.estimatedMins}m</span>}
               {t.timeSpent>0&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:"#059669"}}>⏱ {fmtDur(t.timeSpent)}</span>}
@@ -1069,6 +1520,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
             )}
           </div>
           <div style={{display:"flex",gap:4,alignItems:"flex-start"}}>
+            {!t.done&&<button className="btn btn-ghost btn-xs" title="Focus Mode" onClick={()=>startFocus(t,key)} style={{fontSize:12}}>🎯</button>}
             {!t.done&&(timerRunning
               ?<button className="btn btn-amber btn-xs" onClick={()=>stopTimer(t.id,t.title,activeBrand,brandTab,key)}>Stop</button>
               :<button className="btn btn-ghost btn-xs" onClick={()=>startTimer(t.id,t.title,activeBrand,brandTab)}>⏱</button>
@@ -1085,7 +1537,12 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
         <div className="brand-hdr">
           <div className="brand-logo" style={{background:currentBrand.bg}}>{currentBrand.emoji}</div>
           <div style={{flex:1}}>
-            <div style={{fontFamily:"Martian Mono,monospace",fontSize:15,fontWeight:600,color:currentBrand.color,letterSpacing:.5}}>{currentBrand.name.toUpperCase()}</div>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:15,fontWeight:600,color:currentBrand.color,letterSpacing:.5}}>{currentBrand.name.toUpperCase()}</div>
+              {brandStat?.hg&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",width:30,height:30,borderRadius:7,background:brandStat.hg.color+"18",border:"1.5px solid "+brandStat.hg.color+"40"}}>
+                <span style={{fontFamily:"Martian Mono,monospace",fontSize:14,fontWeight:700,color:brandStat.hg.color}}>{brandStat.hg.grade}</span>
+              </div>}
+            </div>
             <div style={{display:"flex",gap:12,marginTop:6,flexWrap:"wrap"}}>
               {[[brandStat?.tasks||0,"Tasks","var(--ink-4)"],[brandStat?.done||0,"Done","#059669"],[brandStat?.pending||0,"Pending","#D97706"],[brandStat?.overdue||0,"Overdue",brandStat?.overdue?"#DC2626":"var(--ink-4)"],[fmtDur(brandStat?.timeSpent||0),"Tracked","#7C3AED"]].map(([v,l,c])=>(
                 <div key={l} style={{display:"flex",gap:5,alignItems:"center"}}>
@@ -1138,6 +1595,16 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
           </div>
         </div>
 
+        {/* Bulk action bar */}
+        {selectedTasks.size>0&&(
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"9px 16px",background:"#EFF4FF",border:"1px solid #BFDBFE",borderRadius:10,marginBottom:12}}>
+            <span style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:"#2563EB",fontWeight:600}}>{selectedTasks.size} SELECTED</span>
+            <button className="btn btn-primary btn-sm" onClick={()=>bulkComplete(key,selectedTasks)}>✓ Complete All</button>
+            <button className="btn btn-ghost btn-sm" style={{color:"#DC2626",borderColor:"#FCA5A5"}} onClick={()=>{if(window.confirm("Delete "+selectedTasks.size+" tasks?"))bulkDelete(key,selectedTasks);}}>🗑 Delete</button>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setSelectedTasks(new Set(filteredTasks.map(t=>t.id)))}>Select All</button>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setSelectedTasks(new Set())}>✕ Cancel</button>
+          </div>
+        )}
         {/* List view */}
         {brandView==="list"&&(
           <>
@@ -1287,6 +1754,22 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
         <AIPanel insight={insights["analytics"]} loading={insightLoading["analytics"]}
           onRefresh={()=>fetchInsight("analytics","Comprehensive analytics review: completion rates, underperforming brands, resource allocation, 3 strategic recommendations to improve productivity score.")}
           label="◎ AI ANALYTICS INTELLIGENCE"/>
+        {/* Health grades grid */}
+        <div className="card mb14">
+          <div className="card-header"><span className="card-title">BRAND HEALTH GRADES</span></div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:8}}>
+            {bStats.map(b=>(
+              <div key={b.id} onClick={()=>{setActiveBrand(b.id);setView("brand");}} style={{textAlign:"center",padding:"12px 8px",border:"1px solid var(--line)",borderRadius:10,cursor:"pointer",transition:"background .12s"}}
+                onMouseEnter={e=>e.currentTarget.style.background="var(--surface)"} onMouseLeave={e=>e.currentTarget.style.background=""}>
+                <div style={{fontSize:18,marginBottom:5}}>{b.emoji}</div>
+                <div style={{fontFamily:"Martian Mono,monospace",fontSize:26,fontWeight:700,color:b.hg?.color||"#9099B8",lineHeight:1,marginBottom:3}}>{b.hg?.grade||"—"}</div>
+                <div style={{fontSize:10,fontWeight:500,color:"var(--ink-3)",marginBottom:3}}>{b.name}</div>
+                <div style={{fontSize:9.5,color:b.hg?.color||"var(--ink-4)"}}>{b.hg?.label}</div>
+                {b.overdue>0&&<div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"#DC2626",marginTop:3}}>⚠ {b.overdue} OVR</div>}
+              </div>
+            ))}
+          </div>
+        </div>
         <div className="g4 mb16">
           {[{l:"PRODUCTIVITY SCORE",v:`${score}/100`,c:score>=70?"#059669":"#D97706"},{l:"COMPLETION RATE",v:`${stats.rate}%`,c:"#2563EB"},{l:"TOTAL TIME TRACKED",v:fmtDur(stats.totalTimeSpent),c:"#7C3AED"},{l:"ACTIVE BRANDS",v:bStats.filter(b=>b.tasks>0).length,c:"#B45309"}].map(s=>(
             <div key={s.l} className="kpi-card" style={{borderTop:"none",borderLeft:`3px solid ${s.c}`}}>
@@ -1604,7 +2087,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
                 {l:"Strategic recommendations",p:"Top 3 strategic recommendations for running my 6 brands more effectively."},
               ].map(s=>(
                 <button key={s.l} className="ai-btn" style={{justifyContent:"flex-start",borderRadius:8,padding:"8px 12px",fontSize:12,textAlign:"left"}}
-                  onClick={()=>{setChatInput(s.p);setTimeout(()=>sendMessage(),50);}}>
+                  onClick={()=>{if(s.action){s.action();}else{setChatInput(s.p);setTimeout(()=>sendMessage(),50);}}}>
                   → {s.l}
                 </button>
               ))}
@@ -1645,6 +2128,14 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
 
   return (
     <div className="app">
+      {showConfetti&&<Confetti/>}
+      {focusMode&&<FocusOverlay
+        task={focusMode.task} secs={focusSecs} running={focusRunning}
+        elapsed={focusStarted?Date.now()-focusStarted:0}
+        onToggle={()=>setFocusRunning(r=>!r)}
+        onReset={()=>{setFocusSecs(POMODORO_MINS*60);setFocusRunning(false);setFocusStarted(Date.now());}}
+        onDone={(markDone)=>endFocus(markDone)}
+        onExit={()=>endFocus(false)}/>}
       <div className={`mob-overlay${sidebarOpen?" open":""}`} onClick={()=>setSidebarOpen(false)}/>
       <nav className={`sidebar${sidebarOpen?" open":""}`}>
         <div className="logo-area">
@@ -1678,6 +2169,12 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
           })}
         </div>
         <div className="sidebar-stats">
+          {(streak.current||0)>0&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:"rgba(245,158,11,.1)",borderRadius:8,marginBottom:10,border:"1px solid rgba(245,158,11,.2)"}}>
+            <span style={{fontSize:16}}>🔥</span>
+            <div><div style={{fontFamily:"Martian Mono,monospace",fontSize:13,fontWeight:700,color:"#F59E0B",lineHeight:1}}>{streak.current} day streak</div>
+              <div style={{fontSize:10,color:"rgba(245,158,11,.6)",marginTop:2}}>Best: {streak.best||0} days</div>
+            </div>
+          </div>}
           <div className="sidebar-stats-row">
             <div><div className="ss-val">{stats.done}</div><div className="ss-lbl">Done</div></div>
             <div style={{textAlign:"right"}}><div className="ss-val" style={{color:"var(--ink-4)"}}>{stats.pending}</div><div className="ss-lbl">Left</div></div>
@@ -1722,6 +2219,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
               <div style={{width:6,height:6,borderRadius:"50%",background:dbStatus==="ok"?"#059669":dbStatus==="loading"?"#2563EB":"#DC2626",boxShadow:dbStatus==="ok"?"0 0 6px #059669":"none"}}/>
               <span style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:dbStatus==="ok"?"#059669":dbStatus==="loading"?"#2563EB":"#DC2626",fontWeight:600,letterSpacing:.5}}>{dbStatus==="ok"?"CLOUD":dbStatus==="loading"?"SYNC...":"LOCAL"}</span>
             </div>
+            {stats.overdue>0&&<button onClick={()=>setView("warroom")} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",background:"rgba(220,38,38,.1)",border:"1px solid rgba(220,38,38,.3)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"#DC2626",cursor:"pointer",fontWeight:600}}>⚔ WAR ROOM <span style={{background:"#DC2626",color:"#fff",borderRadius:99,padding:"0 5px",fontSize:7.5,marginLeft:2}}>{stats.overdue}</span></button>}
             <div className="topbar-date">{new Date().toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"})}</div>
             <div className="topbar-dot" style={{background:"#4ADE80",boxShadow:"0 0 8px #4ADE80"}}/>
           </div>
@@ -1742,6 +2240,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
 
         <div className="page-content">
           {view==="dashboard"&&renderDashboard()}
+          {view==="warroom"  &&<div style={{flex:1,overflow:"auto"}}>{renderWarRoom()}</div>}
           {view==="timelog" &&renderTimeLog()}
           {view==="brand"  &&renderBrand()}
           {view==="analytics"&&renderAnalytics()}
@@ -1754,6 +2253,8 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
       {showTaskModal    &&<TaskModal onSave={addTask} onClose={()=>setShowTaskModal(false)} brandId={activeBrand} tab={brandTab} brands={BRANDS}/>}
       {showPinModal     &&<PinModal onSave={addNote} onClose={()=>setShowPinModal(false)}/>}
       {showReminderModal&&<ReminderModal onSave={addReminder} onClose={()=>setShowReminderModal(false)} defaultDate={reminderDate}/>}
+      {showAIGen&&<AIGenModal onAddTasks={(forms)=>forms.forEach(f=>addTask(f))} onClose={()=>setShowAIGen(false)} brandId={activeBrand||"goldbet"} tab={brandTab} apiKey={API_KEY}/>}
+      {showTemplates&&<TemplatesModal templates={data.templates||[]} onSave={saveTemplate} onDeploy={deployTemplate} onDelete={deleteTemplate} onClose={()=>setShowTemplates(false)} activeBrand={activeBrand||"goldbet"} activeTab={brandTab}/>}
       {showGlobalSearch &&<GlobalSearch data={data} onClose={()=>setShowGlobalSearch(false)} onNavigate={(v,b)=>{setView(v);if(b)setActiveBrand(b);}}/>}
       {showShortcuts    &&<ShortcutsModal onClose={()=>setShowShortcuts(false)}/>}
       <ToastContainer toasts={toasts}/>
