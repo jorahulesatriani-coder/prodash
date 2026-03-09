@@ -22,7 +22,7 @@ const PRIORITIES = [
   {key:"high",label:"High",cls:"p-high",dot:"pd-high"},
   {key:"urgent",label:"Urgent",cls:"p-urgent",dot:"pd-urgent"},
 ];
-const CATEGORIES = ["Strategy","Operations","Compliance","Finance","Marketing","Tech","Admin","Meeting","Review","Other"];
+const CATEGORIES = ["Reporting","Compliance","Accounting","Payroll"];
 const PIN_COLORS = ["#FFF9C4","#FFEEBA","#FFE0E0","#E0F4E0","#E0E8FF","#F3E8FF","#FFF0E0","#E0F8F8"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const WEEKDAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -152,17 +152,41 @@ function ToastContainer({toasts}) {
 function TaskModal({onSave,onClose,brandId,tab,brands}) {
   const [f,setF]=useState({title:"",priority:"medium",due:"",category:"",estimatedMins:"",note:"",brand:brandId||"",tab:tab||BRAND_TABS[0]});
   const [err,setErr]=useState("");
+  const [files,setFiles]=useState([]);
+  const [lightbox,setLightbox]=useState(null);
+  const fileRef=useRef(null);
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
-  const save=()=>{ if(!f.title.trim()){setErr("Title is required");return;} onSave({...f,title:f.title.trim(),estimatedMins:f.estimatedMins?parseInt(f.estimatedMins):null}); onClose(); };
+
+  const handleFiles=(incoming)=>{
+    Array.from(incoming).forEach(file=>{
+      if(file.size>5*1024*1024){setErr("File too large — max 5MB");return;}
+      const reader=new FileReader();
+      reader.onload=e=>setFiles(p=>[...p,{id:uid(),name:file.name,type:file.type,data:e.target.result}]);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeFile=(id)=>setFiles(p=>p.filter(f=>f.id!==id));
+
+  const save=()=>{
+    if(!f.title.trim()){setErr("Title is required");return;}
+    onSave({...f,title:f.title.trim(),estimatedMins:f.estimatedMins?parseInt(f.estimatedMins):null,attachments:files});
+    onClose();
+  };
+
+  const isImg=(type)=>type.startsWith("image/");
+
   return (
     <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="modal-box">
         <div className="modal-title"><span>ADD TASK</span><button className="modal-close" onClick={onClose}>✕</button></div>
         {err&&<div className="badge badge-red mb12" style={{display:"block",padding:"7px 10px",borderRadius:6}}>{err}</div>}
+
         <div className="form-group mb12">
           <label className="form-label">Task Title *</label>
           <input className="inp" placeholder="What needs to be done?" value={f.title} onChange={e=>set("title",e.target.value)} autoFocus onKeyDown={e=>e.key==="Enter"&&save()}/>
         </div>
+
         <div className="form-row mb12">
           <div className="form-group"><label className="form-label">Priority</label>
             <select className="sel" value={f.priority} onChange={e=>set("priority",e.target.value)}>
@@ -176,6 +200,7 @@ function TaskModal({onSave,onClose,brandId,tab,brands}) {
             </select>
           </div>
         </div>
+
         <div className="form-row mb12">
           <div className="form-group"><label className="form-label">Due Date</label>
             <input className="inp" type="date" value={f.due} onChange={e=>set("due",e.target.value)}/>
@@ -184,6 +209,7 @@ function TaskModal({onSave,onClose,brandId,tab,brands}) {
             <input className="inp" type="number" placeholder="e.g. 30" min="1" value={f.estimatedMins} onChange={e=>set("estimatedMins",e.target.value)}/>
           </div>
         </div>
+
         {!brandId&&(
           <div className="form-row mb12">
             <div className="form-group"><label className="form-label">Brand</label>
@@ -199,15 +225,68 @@ function TaskModal({onSave,onClose,brandId,tab,brands}) {
             </div>
           </div>
         )}
-        <div className="form-group mb20">
+
+        <div className="form-group mb12">
           <label className="form-label">Notes / Context</label>
           <textarea className="ta" placeholder="Context, links, details..." value={f.note} onChange={e=>set("note",e.target.value)}/>
         </div>
+
+        {/* ── File / Image Upload ── */}
+        <div className="form-group mb20">
+          <label className="form-label">Attachments</label>
+          <div
+            className="drop-zone"
+            style={{padding:"14px 16px",cursor:"pointer"}}
+            onClick={()=>fileRef.current?.click()}
+            onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor="#2563EB";}}
+            onDragLeave={e=>{e.currentTarget.style.borderColor="";}}
+            onDrop={e=>{e.preventDefault();e.currentTarget.style.borderColor="";handleFiles(e.dataTransfer.files);}}
+          >
+            <div style={{fontSize:20,marginBottom:5}}>📎</div>
+            <div style={{fontSize:12.5,fontWeight:500,color:"#374151"}}>Drop files here or click to browse</div>
+            <div style={{fontSize:11,color:"#9099B8",marginTop:3}}>Images, PDFs, docs — max 5MB each</div>
+            <input ref={fileRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" style={{display:"none"}} onChange={e=>handleFiles(e.target.files)}/>
+          </div>
+
+          {/* File preview grid */}
+          {files.length>0&&(
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))",gap:8,marginTop:10}}>
+              {files.map(file=>(
+                <div key={file.id} style={{position:"relative",border:"1px solid #E4E7F0",borderRadius:8,overflow:"hidden",background:"#F8F9FC",cursor:isImg(file.type)?"pointer":"default"}}
+                  onClick={()=>isImg(file.type)&&setLightbox(file)}>
+                  {isImg(file.type)
+                    ?<img src={file.data} alt={file.name} style={{width:"100%",height:72,objectFit:"cover",display:"block"}}/>
+                    :<div style={{height:72,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
+                      <span style={{fontSize:24}}>{file.type.includes("pdf")?"📄":file.type.includes("sheet")||file.type.includes("excel")?"📊":"📝"}</span>
+                    </div>
+                  }
+                  <div style={{padding:"4px 6px",fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"#52576E",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",borderTop:"1px solid #E4E7F0"}}>
+                    {file.name}
+                  </div>
+                  <button onClick={e=>{e.stopPropagation();removeFile(file.id);}} style={{position:"absolute",top:3,right:3,background:"rgba(0,0,0,.55)",border:"none",color:"#fff",borderRadius:3,padding:"1px 5px",fontSize:9.5,cursor:"pointer",lineHeight:1.4}}>✕</button>
+                  {isImg(file.type)&&<div style={{position:"absolute",bottom:22,right:3,background:"rgba(0,0,0,.45)",borderRadius:3,padding:"2px 5px",fontSize:8.5,color:"#fff"}}>🔍</div>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="row gap8">
           <button className="btn btn-primary flex1" onClick={save}>+ Add Task</button>
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
         </div>
       </div>
+
+      {/* ── Lightbox for image preview ── */}
+      {lightbox&&(
+        <div onClick={()=>setLightbox(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:24,cursor:"zoom-out"}}>
+          <div onClick={e=>e.stopPropagation()} style={{position:"relative",maxWidth:"90vw",maxHeight:"90vh"}}>
+            <img src={lightbox.data} alt={lightbox.name} style={{maxWidth:"100%",maxHeight:"85vh",borderRadius:10,boxShadow:"0 20px 60px rgba(0,0,0,.5)",display:"block"}}/>
+            <div style={{textAlign:"center",marginTop:10,fontFamily:"Martian Mono,monospace",fontSize:10,color:"rgba(255,255,255,.5)"}}>{lightbox.name}</div>
+            <button onClick={()=>setLightbox(null)} style={{position:"absolute",top:-12,right:-12,background:"#fff",border:"none",borderRadius:"50%",width:28,height:28,fontSize:12,cursor:"pointer",fontWeight:700,color:"#0D0F1A",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,.3)"}}>✕</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
