@@ -790,3 +790,185 @@ input[type="range"]::-webkit-slider-thumb {
 .temp-warm { color: #D97706; }
 .temp-cool { color: #2563EB; }
 .temp-cold { color: #6B7280; }
+
+/* ══════════════════════════════════════════
+   MOBILE — FULL RESPONSIVE REDESIGN
+   ══════════════════════════════════════════ */
+
+/* ── Bottom Nav Bar (mobile only) ── */
+.mobile-nav {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 60px;
+  background: var(--white);
+  border-top: 1px solid var(--line);
+  z-index: 100;
+  padding: 0 4px;
+  box-shadow: 0 -4px 20px rgba(13,15,26,.1);
+  align-items: center;
+  justify-content: space-around;
+}
+.mob-nav-btn {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 3px; padding: 8px 10px; border-radius: 10px;
+  cursor: pointer; flex: 1; border: none; background: none;
+  transition: all .15s; color: var(--ink-4); min-width: 0;
+}
+.mob-nav-btn.active { color: var(--blue); background: rgba(37,99,235,.08); }
+.mob-nav-btn span:first-child { font-size: 20px; line-height: 1; }
+.mob-nav-btn span:last-child { font-family: 'Martian Mono', monospace; font-size: 7px; letter-spacing: .5px; text-transform: uppercase; font-weight: 500; white-space: nowrap; }
+
+/* ── Mobile topbar strip ── */
+@media (max-width: 768px) {
+  .mobile-nav { display: flex; }
+
+  /* give space for bottom nav */
+  .page-content { padding-bottom: 70px !important; }
+
+  /* Topbar - slim on mobile */
+  .topbar { padding: 0 12px; height: 48px; gap: 8px; }
+  .page-title { font-size: 9px; letter-spacing: 1px; }
+
+  /* Hide non-essential topbar items on mobile */
+  .topbar-hide-mob { display: none !important; }
+
+  /* Sidebar still works as slide-out menu */
+  .sidebar { width: 260px; }
+
+  /* Page content */
+  .page-content { padding: 12px 12px 70px; }
+
+  /* Cards */
+  .card { padding: 14px; border-radius: 10px; }
+
+  /* Grids */
+  .g2, .g3 { grid-template-columns: 1fr; }
+  .g4 { grid-template-columns: 1fr 1fr; }
+  .g5 { grid-template-columns: 1fr 1fr; }
+
+  /* KPI cards */
+  .kpi-card { padding: 12px 14px; }
+  .kpi-val { font-size: 28px !important; }
+
+  /* Quick add bar */
+  .quick-add-bar { padding: 8px 12px; gap: 6px; }
+  .quick-add-bar .btn-ai { display: none; }
+
+  /* Tables in brand view - make scrollable */
+  .brand-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Modal full screen on mobile */
+  .modal-box { 
+    border-radius: 16px 16px 0 0 !important; 
+    position: fixed !important; 
+    bottom: 0 !important; 
+    left: 0 !important; 
+    right: 0 !important;
+    top: auto !important;
+    max-width: 100% !important;
+    max-height: 85vh;
+    overflow-y: auto;
+    margin: 0 !important;
+  }
+  .modal-overlay {
+    align-items: flex-end !important;
+  }
+
+  /* Score ring - smaller */
+  .score-ring-wrap { transform: scale(0.8); transform-origin: top right; }
+
+  /* Briefing card */
+  .briefing-card { padding: 14px; }
+  .briefing-title { font-size: 8px; }
+  .briefing-text { font-size: 12px; }
+
+  /* Topbar right - show only essentials */
+  .topbar-right { gap: 5px; }
+
+  /* Dashboard header */
+  .dash-header-greeting { font-size: 22px !important; }
+  .dash-header-sub { font-size: 12px !important; }
+
+  /* Mission card */
+  .mission-card-btns { flex-direction: row; gap: 6px; }
+
+  /* Brand pulse table rows - compact */
+  .brand-pulse-row { padding: 8px 12px !important; }
+
+  /* Float button */
+  .float-capture { bottom: 72px !important; left: 12px !important; }
+
+  /* AI buttons - wrap nicely */
+  .ai-btn-group { flex-wrap: wrap; gap: 5px; }
+
+  /* War room grid */
+  .war-grid { grid-template-columns: 1fr !important; }
+
+  /* Hide some topbar extras */
+  .topbar-date-full { display: none; }
+
+  /* Analytics charts */
+  .chart-container { height: 120px !important; }
+
+  /* Task items */
+  .task-item { padding: 10px 12px; }
+  .task-meta { flex-wrap: wrap; gap: 4px; }
+
+  /* Pinboard */
+  .pinboard { columns: 1 !important; }
+
+  /* Kanban - horizontal scroll */
+  .kanban-board { overflow-x: auto; -webkit-overflow-scrolling: touch; min-width: 0; }
+  .kanban-col { min-width: 240px; flex-shrink: 0; }
+
+  /* Time log table */
+  .timelog-table th:nth-child(3),
+  .timelog-table td:nth-child(3) { display: none; }
+
+  /* Goals grid */
+  .goals-grid { grid-template-columns: 1fr !important; }
+
+  /* Brain dump */
+  .braindump-wrap { padding: 12px; }
+
+  /* Weekly plan - stack everything */
+  .weekplan-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ── Extra small phones (< 390px) ── */
+@media (max-width: 390px) {
+  .g4 { grid-template-columns: 1fr 1fr; }
+  .kpi-val { font-size: 24px !important; }
+  .page-content { padding: 10px 10px 70px; }
+  .topbar { padding: 0 10px; }
+  .mob-nav-btn span:last-child { display: none; } /* icon only on tiny screens */
+  .mob-nav-btn { padding: 10px 8px; }
+  .mob-nav-btn span:first-child { font-size: 22px; }
+}
+
+/* ── Touch improvements ── */
+@media (hover: none) {
+  .nav-item:hover { background: none; }
+  .task-item:hover { background: none !important; }
+  .btn:active { opacity: .7; transform: scale(.97); }
+  .mob-nav-btn:active { background: rgba(37,99,235,.12); }
+  
+  /* Bigger tap targets */
+  .btn { min-height: 36px; }
+  .btn-xs { min-height: 30px; }
+  .task-check { width: 22px; height: 22px; }
+  .nav-item { padding: 10px 10px; min-height: 40px; }
+}
+
+/* ── Safe area for iPhone notch/home bar ── */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .mobile-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+    height: calc(60px + env(safe-area-inset-bottom));
+  }
+  @media (max-width: 768px) {
+    .page-content { padding-bottom: calc(70px + env(safe-area-inset-bottom)) !important; }
+    .float-capture { bottom: calc(72px + env(safe-area-inset-bottom)) !important; }
+  }
+}
