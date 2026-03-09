@@ -46,6 +46,15 @@ const brandTemp = (b, tasks) => {
 const fmtSecs = s => { const m=Math.floor(s/60),ss=s%60; return String(m).padStart(2,"0")+":"+String(ss).padStart(2,"0"); };
 const loadStreak = () => { try{return JSON.parse(localStorage.getItem("prodash_streak")||"{}")||{};}catch{return{};} };
 const saveStreakLS = s => localStorage.setItem("prodash_streak", JSON.stringify(s));
+const SCORE_HIST_KEY = "prodash_score_hist";
+const loadScoreHist  = () => { try{return JSON.parse(localStorage.getItem(SCORE_HIST_KEY)||"[]");}catch{return[];} };
+const saveScoreHist  = h => { try{localStorage.setItem(SCORE_HIST_KEY,JSON.stringify(h));}catch{} };
+const WEEKLY_KEY     = "prodash_weekly";
+const loadWeekly     = () => { try{return JSON.parse(localStorage.getItem(WEEKLY_KEY)||"[]");}catch{return[];} };
+const saveWeekly     = w => { try{localStorage.setItem(WEEKLY_KEY,JSON.stringify(w));}catch{} };
+const ACCT_KEY       = "prodash_acct";
+const loadAcct       = () => { try{return JSON.parse(localStorage.getItem(ACCT_KEY)||"{}")||{};}catch{return{};} };
+const saveAcct       = a => { try{localStorage.setItem(ACCT_KEY,JSON.stringify(a));}catch{} };
 const NAV_ITEMS = [
   {id:"dashboard",icon:"◈",label:"Dashboard"},
   {id:"warroom",  icon:"⚔",label:"War Room"},
@@ -72,7 +81,6 @@ const LOG_TYPES = {
   session_start:{color:"#6B7280",label:"Session"},
   ai_insight:   {color:"#4F46E5",label:"AI Insight"},
   bulk_action:  {color:"#F59E0B",label:"Bulk Action"},
-  recurring:    {color:"#059669",label:"Recurring"},
   recurring:    {color:"#059669",label:"Recurring"},
 };
 
