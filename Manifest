@@ -1,0 +1,22 @@
+{
+  "name": "PRODASH — Command Centre",
+  "short_name": "PRODASH",
+  "description": "Personal productivity command centre for managing betting/gaming brands",
+  "start_url": "/prodash/",
+  "display": "standalone",
+  "background_color": "#0F1117",
+  "theme_color": "#4F46E5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "business"]
+}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" rx="22" fill="#4F46E5"/>
+  <text y="75" x="12" font-size="72" font-family="Arial">⚡</text>
+</svg>
