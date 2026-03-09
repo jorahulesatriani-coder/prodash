@@ -718,3 +718,75 @@ html,body,#root{height:100%;background:var(--bg)}
   background: rgba(37,99,235,.05) !important;
   border-left: 3px solid #2563EB !important;
 }
+
+/* ── BRAIN DUMP ── */
+.braindump-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6);
+  z-index: 300; display: flex; align-items: center; justify-content: center;
+}
+
+/* ── EOD BANNER ── */
+@keyframes slide-up {
+  from { transform: translateY(100px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+.eod-banner { animation: slide-up .4s ease-out; }
+
+/* ── FLOATING BUTTON ── */
+@media (max-width: 768px) {
+  .float-capture { left: 16px !important; bottom: 16px !important; }
+}
+
+/* ── GOALS PROGRESS ── */
+input[type="range"] {
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--line);
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: #2563EB;
+  cursor: pointer;
+}
+
+/* ── MISSION CARD PULSE ── */
+@keyframes mission-glow {
+  0%, 100% { box-shadow: 0 0 0 rgba(37,99,235,.2); }
+  50%       { box-shadow: 0 0 20px rgba(37,99,235,.15); }
+}
+
+/* ── JOURNAL ENTRY HOVER ── */
+.journal-entry:hover { opacity: .7; cursor: pointer; }
+
+/* ── ACCOUNTABILITY BAR ── */
+.acct-bar {
+  height: 8px; border-radius: 99px; overflow: hidden;
+  background: var(--surface); margin: 8px 0;
+}
+.acct-bar-fill {
+  height: 100%; border-radius: 99px;
+  transition: width .6s cubic-bezier(.4,0,.2,1);
+}
+
+/* ── RADIO / AMBIENT ── */
+@keyframes ambient-pulse {
+  0%   { transform: scale(1) translate(0, 0); opacity: 0.4; }
+  100% { transform: scale(1.15) translate(2%, 2%); opacity: 0.8; }
+}
+
+/* ── VOICE PULSE ── */
+@keyframes voice-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(220,38,38,.4); }
+  100% { box-shadow: 0 0 0 20px rgba(220,38,38,0); }
+}
+
+/* ── TEMPERATURE INDICATOR ── */
+.temp-hot  { color: #DC2626; }
+.temp-warm { color: #D97706; }
+.temp-cool { color: #2563EB; }
+.temp-cold { color: #6B7280; }
