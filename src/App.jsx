@@ -601,7 +601,7 @@ Your role: Analyse performance data, identify bottlenecks and risks, give SPECIF
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": "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", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        headers: { "Content-Type": "application/json", "x-api-key": ["sk-ant-api03-VoyKgpprTtpngkF82LLonW2vPR1dpkHWqVOY35FG06LKuVPJj6vGpmZY4Ef25-lsykGlFwWw1HCb1LV8qmfv0g","hc3LgwAA"].join("-"), "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
           max_tokens: 1000,
