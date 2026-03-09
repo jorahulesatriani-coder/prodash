@@ -19,7 +19,7 @@ const RECURRENCE  = [{key:"",label:"None"},{key:"daily",label:"Daily"},{key:"wee
 const PIN_COLORS  = ["#FFF9C4","#FFEEBA","#FFE0E0","#E0F4E0","#E0E8FF","#F3E8FF","#FFF0E0","#E0F8F8"];
 const MONTHS      = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const WEEKDAYS    = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-const STORAGE_KEY = "prodash_v6";
+const STORAGE_KEY = "prodash_v7";
 const KANBAN_COLS = ["todo","inprogress","done"];
 const KANBAN_LABELS = {todo:"To Do",inprogress:"In Progress",done:"Done"};
 const POMODORO_MINS = 25;
@@ -33,6 +33,16 @@ const healthGrade = (rate, overdue, total) => {
   return {grade:"F",color:"#DC2626",label:"Critical"};
 };
 const taskAgeDays = (createdAt) => (Date.now() - new Date(createdAt)) / 86400000;
+const brandTemp = (b, tasks) => {
+  // 0-100 temperature: activity + completion - overdue - aging
+  const recency = tasks.filter(t=>t.done&&t.doneAt&&(Date.now()-new Date(t.doneAt))<3*86400000).length;
+  const aging   = tasks.filter(t=>!t.done&&taskAgeDays(t.createdAt)>7).length;
+  const temp    = Math.min(100, Math.max(0, b.rate + (recency*8) - (b.overdue*12) - (aging*5)));
+  if(temp>=75) return {temp,label:"🔥 Hot",color:"#DC2626",desc:"Active & progressing"};
+  if(temp>=50) return {temp,label:"⚡ Warm",color:"#D97706",desc:"Steady progress"};
+  if(temp>=25) return {temp,label:"❄ Cool",color:"#2563EB",desc:"Slowing down"};
+  return {temp,label:"🧊 Cold",color:"#6B7280",desc:"Needs attention"};
+};
 const fmtSecs = s => { const m=Math.floor(s/60),ss=s%60; return String(m).padStart(2,"0")+":"+String(ss).padStart(2,"0"); };
 const loadStreak = () => { try{return JSON.parse(localStorage.getItem("prodash_streak")||"{}")||{};}catch{return{};} };
 const saveStreakLS = s => localStorage.setItem("prodash_streak", JSON.stringify(s));
@@ -44,6 +54,11 @@ const NAV_ITEMS = [
   {id:"calendar", icon:"◫",label:"Calendar"},
   {id:"pinboard", icon:"◆",label:"Pin Board"},
   {id:"ai",       icon:"◎",label:"AI Assistant"},
+  {id:"journal",  icon:"📖",label:"Work Journal"},
+  {id:"goals",    icon:"🎯",label:"Goals"},
+  {id:"decisions",icon:"⚖",label:"Decision Log"},
+  {id:"braindump",icon:"⚡",label:"Brain Dump"},
+  {id:"weekplan", icon:"📅",label:"Weekly Plan"},
 ];
 const LOG_TYPES = {
   task_added:   {color:"#2563EB",label:"Task Added"},
@@ -74,7 +89,7 @@ const sbLoad = async () => {
     const rows = await res.json();
     if (rows&&rows[0]?.data) {
       const p=rows[0].data;
-      return {tasks:p.tasks||{},notes:p.notes||[],reminders:p.reminders||[],uploads:p.uploads||{},timelog:p.timelog||[],aiInsights:p.aiInsights||{},templates:p.templates||[],meta:p.meta||{createdAt:nowISO()}};
+      return {tasks:p.tasks||{},notes:p.notes||[],reminders:p.reminders||[],uploads:p.uploads||{},timelog:p.timelog||[],aiInsights:p.aiInsights||{},templates:p.templates||[],goals:p.goals||[],decisions:p.decisions||[],journal:p.journal||{},meta:p.meta||{createdAt:nowISO()}};
     }
     return emptyData();
   } catch { return emptyData(); }
@@ -99,8 +114,8 @@ const fmtDate     = (d) => d?new Date(d).toLocaleDateString("en-GB",{day:"2-digi
 const fmtTime     = (d) => d?new Date(d).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"";
 const fmtDateTime = (d) => d?`${fmtDate(d)} ${fmtTime(d)}`:"";
 const fmtDur      = (ms) => { if(!ms||ms<0) return "0m"; const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000); return h?`${h}h ${m}m`:`${m}m`; };
-const emptyData   = () => ({tasks:{},notes:[],reminders:[],uploads:{},timelog:[],aiInsights:{},templates:[],meta:{createdAt:nowISO()}});
-const loadLocal   = () => { try{const r=localStorage.getItem(STORAGE_KEY); if(!r) return emptyData(); const p=JSON.parse(r); return {tasks:p.tasks||{},notes:p.notes||[],reminders:p.reminders||[],uploads:p.uploads||{},timelog:p.timelog||[],aiInsights:p.aiInsights||{},templates:p.templates||[],meta:p.meta||{createdAt:nowISO()}};} catch{return emptyData();}};
+const emptyData   = () => ({tasks:{},notes:[],reminders:[],uploads:{},timelog:[],aiInsights:{},templates:[],goals:[],decisions:[],journal:{},meta:{createdAt:nowISO()}});
+const loadLocal   = () => { try{const r=localStorage.getItem(STORAGE_KEY); if(!r) return emptyData(); const p=JSON.parse(r); return {tasks:p.tasks||{},notes:p.notes||[],reminders:p.reminders||[],uploads:p.uploads||{},timelog:p.timelog||[],aiInsights:p.aiInsights||{},templates:p.templates||[],goals:p.goals||[],decisions:p.decisions||[],journal:p.journal||{},meta:p.meta||{createdAt:nowISO()}};} catch{return emptyData();}};
 const saveLocal   = (d) => { try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} };
 
 // ══════════════════════════════════════════════════════════
@@ -704,6 +719,17 @@ export default function App() {
   const [streak,setStreak]         = useState(loadStreak);
   const prevRates = useRef({});
   const focusTimer = useRef(null);
+  const [radioMode,setRadioMode]           = useState(false);
+  const [showWhatIf,setShowWhatIf]         = useState(false);
+  const [whatIfLoading,setWhatIfLoading]   = useState(false);
+  const [whatIfResult,setWhatIfResult]     = useState(null);
+  const [whatIfInput,setWhatIfInput]       = useState("");
+  const [voiceActive,setVoiceActive]       = useState(false);
+  const [voiceText,setVoiceText]           = useState("");
+  const [stuckTasks,setStuckTasks]         = useState([]);
+  const [stuckLoading,setStuckLoading]     = useState(false);
+  const stuckRef = useRef(false);
+  const recogRef = useRef(null);
   const chatEndRef  = useRef(null);
   const saveTimer   = useRef(null);
   const notifTimer  = useRef(null);
@@ -746,6 +772,87 @@ export default function App() {
 
   // ── Streak save ──
   useEffect(()=>{ saveStreakLS(streak); },[streak]);
+
+  // ── Save score history daily ──
+  useEffect(()=>{
+    const today=todayStr();
+    const hist=loadScoreHist();
+    const last=hist[hist.length-1];
+    if(!last||last.date!==today){
+      const s=getScore();
+      const newHist=[...hist,{date:today,score:s}].slice(-90);
+      setScoreHistory(newHist); saveScoreHist(newHist);
+    }
+  // eslint-disable-next-line
+  },[]);
+
+  // ── Morning prompt: "yesterday I meant to..." ──
+  useEffect(()=>{
+    const lastVisit=localStorage.getItem("prodash_last_visit");
+    const today=todayStr();
+    const yesterday=new Date(Date.now()-86400000).toISOString().split("T")[0];
+    if(lastVisit&&lastVisit===yesterday){
+      const allTasks=Object.values(data.tasks).flat();
+      const missed=allTasks.filter(t=>!t.done&&t.due===yesterday);
+      if(missed.length>0){setMissedTasks(missed);setShowMorningPrompt(true);}
+    }
+    localStorage.setItem("prodash_last_visit",today);
+  // eslint-disable-next-line
+  },[]);
+
+  // ── EOD summary at 5pm ──
+  useEffect(()=>{
+    const check=()=>{
+      const h=new Date().getHours();
+      if(h>=17&&h<18&&!eodDismissed) setShowEOD(true);
+      else if(h>=18) setShowEOD(false);
+    };
+    check();
+    const t=setInterval(check,60000);
+    return()=>clearInterval(t);
+  },[eodDismissed]);
+
+  // ── Pick daily mission task ──
+  useEffect(()=>{
+    const today=todayStr();
+    const mKey="prodash_mission_"+today;
+    const stored=localStorage.getItem(mKey);
+    if(stored){try{const m=JSON.parse(stored);setMissionTask(m.task);setMissionDone(m.done||false);}catch{}}
+    else{
+      // pick highest priority overdue or urgent task
+      const all=Object.entries(data.tasks).flatMap(([k,ts])=>ts.map(t=>({...t,key:k})));
+      const candidates=all.filter(t=>!t.done).sort((a,b)=>{
+        const pOrder={urgent:0,high:1,medium:2,low:3};
+        const ap=pOrder[a.priority]??2, bp=pOrder[b.priority]??2;
+        if(ap!==bp)return ap-bp;
+        if(a.due&&b.due)return a.due.localeCompare(b.due);
+        if(a.due)return -1; if(b.due)return 1;
+        return 0;
+      });
+      if(candidates[0]){setMissionTask(candidates[0]);localStorage.setItem(mKey,JSON.stringify({task:candidates[0],done:false}));}
+    }
+  // eslint-disable-next-line
+  },[]);
+
+  // ── Accountability mirror: Monday check ──
+  useEffect(()=>{
+    const day=new Date().getDay();
+    if(day!==1)return; // Monday only
+    const lastMonday=localStorage.getItem("prodash_acct_monday");
+    const thisMonday=todayStr();
+    if(lastMonday===thisMonday)return;
+    localStorage.setItem("prodash_acct_monday",thisMonday);
+    const prev=loadAcct();
+    if(prev.commitment){
+      const allTasks=Object.values(data.tasks).flat();
+      const weekAgo=new Date(Date.now()-7*86400000).toISOString().split("T")[0];
+      const weekDone=allTasks.filter(t=>t.done&&t.doneAt>=weekAgo).length;
+      const followThrough=prev.commitment>0?Math.round(weekDone/prev.commitment*100):0;
+      const newAcct={...prev,lastWeekCommit:prev.commitment,lastWeekDone:weekDone,lastWeekPct:followThrough,commitment:0};
+      setAcctData(newAcct); saveAcct(newAcct);
+    }
+  // eslint-disable-next-line
+  },[]);
 
   // ── Confetti: detect brand hitting 100% ──
   useEffect(()=>{
@@ -887,6 +994,7 @@ export default function App() {
       if(e.key==="a"||e.key==="A"){setView("ai");setActiveBrand(null);return;}
       if(e.key==="t"||e.key==="T"){setDarkMode(p=>!p);return;}
       if(e.key==="w"||e.key==="W"){setView(v=>v==="warroom"?"dashboard":"warroom");setActiveBrand(null);return;}
+      if(e.key==="r"||e.key==="R"){setRadioMode(p=>!p);return;}
       if(e.key==="f"||e.key==="F"){setView("ai");setActiveBrand(null);return;}
       if(e.key==="?"){setShowShortcuts(true);return;}
     };
@@ -977,6 +1085,7 @@ export default function App() {
             return{dates:arr.slice(-365),current:cur,best:Math.max(s.best||0,cur),lastDate:today};
           });
         }
+        if(done) setTimeout(()=>playDone(),50);
         return {...t,done,doneAt:done?nowISO():null,kanbanStatus:done?"done":t.kanbanStatus==="done"?"todo":t.kanbanStatus};
       });
       const task=tasks.find(t=>t.id===id);
@@ -1081,6 +1190,63 @@ export default function App() {
     showToast("CSV exported");
   };
 
+  // ── Completion sound ──
+  const playDone=useCallback(()=>{
+    try{
+      const ctx=new(window.AudioContext||window.webkitAudioContext)();
+      const osc=ctx.createOscillator(); const gain=ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.setValueAtTime(523,ctx.currentTime);
+      osc.frequency.setValueAtTime(659,ctx.currentTime+0.08);
+      osc.frequency.setValueAtTime(784,ctx.currentTime+0.16);
+      gain.gain.setValueAtTime(0.15,ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.5);
+      osc.start(ctx.currentTime); osc.stop(ctx.currentTime+0.5);
+    }catch{}
+  },[]);
+
+  // ── Goals CRUD ──
+  const addGoal=useCallback((g)=>{
+    const goal={id:uid(),title:g.title,description:g.description||"",targetDate:g.targetDate||"",brand:g.brand||"",category:g.category||"",targetValue:g.targetValue||"",unit:g.unit||"",progress:0,done:false,createdAt:nowISO()};
+    setData(p=>({...p,goals:[...(p.goals||[]),goal]}));
+    showToast("Goal added");
+  },[showToast]);
+  const updateGoalProgress=useCallback((id,progress,done)=>{
+    setData(p=>({...p,goals:(p.goals||[]).map(g=>g.id===id?{...g,progress,done,doneAt:done?nowISO():null}:g)}));
+  },[]);
+  const deleteGoal=useCallback((id)=>{setData(p=>({...p,goals:(p.goals||[]).filter(g=>g.id!==id)}));showToast("Goal deleted","warning");},[showToast]);
+
+  // ── Decisions CRUD ──
+  const addDecision=useCallback((d)=>{
+    const dec={id:uid(),title:d.title,context:d.context||"",decision:d.decision||"",reasoning:d.reasoning||"",brand:d.brand||"",outcome:d.outcome||"pending",createdAt:nowISO()};
+    setData(p=>({...p,decisions:[dec,...(p.decisions||[])]}));
+    showToast("Decision logged");
+  },[showToast]);
+  const deleteDecision=useCallback((id)=>{setData(p=>({...p,decisions:(p.decisions||[]).filter(d=>d.id!==id)}));showToast("Decision deleted","warning");},[showToast]);
+
+  // ── Journal CRUD ──
+  const saveJournalEntry=useCallback((date,entry)=>{
+    setData(p=>({...p,journal:{...(p.journal||{}), [date]:{...((p.journal||{})[date]||{}), ...entry, updatedAt:nowISO()}}}));
+  },[]);
+
+  // ── Mission ──
+  const completeMission=useCallback(()=>{
+    if(!missionTask)return;
+    toggleTask(missionTask.key,missionTask.id);
+    setMissionDone(true);
+    const today=todayStr();
+    localStorage.setItem("prodash_mission_"+today,JSON.stringify({task:missionTask,done:true}));
+    playDone();
+    showToast("🎯 Mission complete!");
+  },[missionTask,toggleTask,playDone,showToast]);
+
+  // ── Set weekly commitment ──
+  const setCommitment=useCallback((n)=>{
+    const newAcct={...acctData,commitment:n,commitDate:todayStr()};
+    setAcctData(newAcct); saveAcct(newAcct);
+    showToast("Commitment set: "+n+" tasks this week");
+  },[acctData,showToast]);
+
   // ── Focus mode actions ──
   const startFocus=(task,key)=>{
     setFocusMode({task,key}); setFocusSecs(POMODORO_MINS*60); setFocusRunning(false); setFocusStarted(Date.now());
@@ -1095,6 +1261,92 @@ export default function App() {
     }
     setFocusMode(null); setFocusRunning(false); clearInterval(focusTimer.current);
   };
+
+  // ── What-If Simulator ──
+  const runWhatIf = async (scenario) => {
+    setWhatIfLoading(true); setWhatIfResult(null);
+    const bs = getBrandStatsRaw();
+    const context = bs.map(b=>`${b.emoji} ${b.name}: ${b.rate}% done, ${b.overdue} overdue, grade ${b.hg?.grade}`).join("\n");
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body: JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,
+          system:"You are a strategic operations analyst. Given brand performance data and a hypothetical scenario, model the likely impact. Be specific with numbers and risks. 4-6 sentences.",
+          messages:[{role:"user",content:`Current brand status:\n${context}\n\nScenario: ${scenario}\n\nModel the impact: what happens to each affected brand's health grade, what risks emerge, what opportunities open up, and what is your recommendation?`}]})
+      });
+      const json = await res.json();
+      setWhatIfResult(json.content?.filter(c=>c.type==="text").map(c=>c.text).join("")||"");
+    } catch { setWhatIfResult("Could not simulate — try again."); }
+    setWhatIfLoading(false);
+  };
+
+  // ── Stuck Task Detector ──
+  const detectStuck = async () => {
+    setStuckLoading(true);
+    const allTasks = Object.entries(data.tasks).flatMap(([k,ts])=>ts.map(t=>({...t,key:k})));
+    const old14 = allTasks.filter(t=>!t.done&&taskAgeDays(t.createdAt)>14).slice(0,10);
+    if(!old14.length){setStuckTasks([]);stuckRef.current="done";setStuckLoading(false);return;}
+    const taskList = old14.map((t,i)=>`${i+1}. "${t.title}" (${Math.floor(taskAgeDays(t.createdAt))} days old, ${t.priority} priority)`).join("\n");
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body: JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:800,
+          system:'You break down stuck tasks. For each stuck task, return ONLY a JSON array — no markdown, no backticks. Format: [{"original":"string","reason":"why it might be stuck","firstStep":"the single smallest next action, 5 min max","rewrite":"rewritten as a smaller actionable task"}]',
+          messages:[{role:"user",content:"Break down these stuck tasks:\n"+taskList}]})
+      });
+      const json = await res.json();
+      const text = json.content?.filter(c=>c.type==="text").map(c=>c.text).join("")||"[]";
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      setStuckTasks(parsed.map((s,i)=>({...s,task:old14[i]})));
+    stuckRef.current="done";
+    } catch { setStuckTasks([]); stuckRef.current="done"; }
+    setStuckLoading(false);
+  };
+
+  // ── Voice Capture ──
+  const startVoice = () => {
+    const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){showToast("Voice not supported in this browser","warning");return;}
+    const r = new SR();
+    r.lang="en-GB"; r.continuous=false; r.interimResults=true;
+    r.onstart = ()=>setVoiceActive(true);
+    r.onresult = e=>{
+      const t=[...e.results].map(r=>r[0].transcript).join("");
+      setVoiceText(t);
+    };
+    r.onend = async()=>{
+      setVoiceActive(false);
+      const final = recogRef.current?.text||"";
+      if(!final.trim()) return;
+      // AI parse the voice input into a task
+      try {
+        const res = await fetch("https://api.anthropic.com/v1/messages",{
+          method:"POST",
+          headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+          body: JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,
+            system:'Parse voice input into a task. Return ONLY JSON, no markdown: {"title":"string","priority":"medium","brand":"goldbet","tab":"Reporting","due":"YYYY-MM-DD or empty","note":""}. brand must be: goldbet|ultrabet|boostbet|allbets|betgold|techdev. priority: low|medium|high|urgent.',
+            messages:[{role:"user",content:'Voice input: "'+final+'"\nToday is '+todayStr()}]})
+        });
+        const json = await res.json();
+        const text = json.content?.filter(c=>c.type==="text").map(c=>c.text).join("")||"";
+        const task = JSON.parse(text.replace(/```json|```/g,"").trim());
+        addTask(task);
+        showToast("🎤 Added: "+task.title);
+      } catch {
+        // fallback: add as plain task
+        addTask({title:final,priority:"medium",brand:activeBrand||"goldbet",tab:brandTab});
+        showToast("🎤 Task added: "+final);
+      }
+      setVoiceText("");
+    };
+    r.onerror = ()=>{setVoiceActive(false);showToast("Voice error — try again","warning");};
+    recogRef.current = {recognition:r,text:""};
+    r.onresult = e=>{const t=[...e.results].map(r=>r[0].transcript).join("");setVoiceText(t);recogRef.current.text=t;};
+    r.start();
+  };
+  const stopVoice = ()=>recogRef.current?.recognition?.stop();
 
   const exportData=()=>{
     const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
@@ -1200,7 +1452,10 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
                 <span style={{fontSize:16}}>{b.emoji}</span>
                 <span style={{fontFamily:"Martian Mono,monospace",fontSize:18,fontWeight:700,color:b.hg?.color||"#9099B8"}}>{b.hg?.grade||"—"}</span>
               </div>
-              <div style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,fontWeight:600,color:"rgba(255,255,255,.4)",letterSpacing:1,marginBottom:5,textTransform:"uppercase"}}>{b.name}</div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                <div style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,fontWeight:600,color:"rgba(255,255,255,.4)",letterSpacing:1,textTransform:"uppercase"}}>{b.name}</div>
+                {(()=>{const t=brandTemp(b,Object.entries(data.tasks).filter(([k])=>k.startsWith(b.id)).flatMap(([,v])=>v));return<span style={{fontSize:9,color:t.color}}>{t.label}</span>})()}
+              </div>
               <div style={{height:3,background:"rgba(255,255,255,.08)",borderRadius:99,marginBottom:5}}>
                 <div style={{height:"100%",width:b.rate+"%",background:b.hg?.color||"#9099B8",borderRadius:99}}/>
               </div>
@@ -1387,6 +1642,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
                   <span style={{fontSize:12.5,fontWeight:500,color:b.color}}>{b.name}</span>
                   {b.overdue>0&&<span className="badge badge-red">{b.overdue}▲</span>}
                   {b.hg&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:10,fontWeight:700,color:b.hg.color}}>{b.hg.grade}</span>}
+                  {(()=>{const t=brandTemp(b,Object.entries(data.tasks).filter(([k])=>k.startsWith(b.id)).flatMap(([,v])=>v));return<span style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:t.color}}>{t.label}</span>})()}
                 </div>
                 <span style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:"var(--ink-4)"}}>{b.tasks}</span>
                 <span style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:b.color,fontWeight:500}}>{b.done}</span>
@@ -2021,6 +2277,393 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
   // ══════════════════════════════════════════════════════════
   //  AI ASSISTANT
   // ══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════
+  //  BRAIN DUMP
+  // ══════════════════════════════════════════════════════════
+  const renderBrainDump=()=>{
+    const [dumpText,setDumpText]=useState("");
+    const [dumpLoading,setDumpLoading]=useState(false);
+    const [dumpResult,setDumpResult]=useState(null);
+    const [dumpErr,setDumpErr]=useState("");
+    const process=async()=>{
+      if(!dumpText.trim())return;
+      setDumpLoading(true);setDumpErr("");setDumpResult(null);
+      try{
+        const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
+          headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+          body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,
+            system:`You sort brain dumps for a professional managing 6 betting/gaming brands: Goldbet,Ultrabet,BoostBet,AllBets,BetGold,TechDev.
+Return ONLY valid JSON, no markdown. Format:
+{
+  "tasks":[{"title":"string","priority":"medium","brand":"goldbet","tab":"Reporting","category":"Compliance","estimatedMins":30,"note":""}],
+  "reminders":[{"title":"string","date":"YYYY-MM-DD","time":"09:00","brand":""}],
+  "notes":[{"title":"string","content":"string"}],
+  "insights":"string (1-2 sentence summary of what this brain dump reveals)"
+}
+priority: low|medium|high|urgent. brand: goldbet|ultrabet|boostbet|allbets|betgold|techdev or "". tab: Reporting|Compliance|Accounting.`,
+            messages:[{role:"user",content:"Sort this brain dump: "+dumpText}]})});
+
+        const json=await res.json();
+        const text=json.content?.filter(c=>c.type==="text").map(c=>c.text).join("")||"";
+        const parsed=JSON.parse(text.replace(/```json|```/g,"").trim());
+        setDumpResult(parsed);
+      }catch(e){setDumpErr("Could not process — try again.");}
+      setDumpLoading(false);
+    };
+    const applyAll=()=>{
+      if(!dumpResult)return;
+      dumpResult.tasks?.forEach(t=>addTask(t));
+      dumpResult.reminders?.forEach(r=>addReminder(r));
+      dumpResult.notes?.forEach(n=>addNote(n));
+      setDumpText("");setDumpResult(null);
+      showToast("Brain dump sorted! "+(dumpResult.tasks?.length||0)+" tasks, "+(dumpResult.reminders?.length||0)+" reminders, "+(dumpResult.notes?.length||0)+" notes added.");
+    };
+    return(
+      <div className="anim-up">
+        <div className="briefing-card" style={{marginBottom:20,borderColor:"rgba(124,58,237,.3)",background:"linear-gradient(135deg,rgba(124,58,237,.06),rgba(79,70,229,.04))"}}>
+          <div className="briefing-title" style={{color:"#7C3AED"}}>⚡ BRAIN DUMP</div>
+          <div style={{fontSize:13,color:"var(--ink-3)",lineHeight:1.7,marginBottom:16}}>
+            Type <strong>everything</strong> in your head right now — tasks, worries, ideas, reminders, random thoughts. Don't organise. Don't filter. Just dump it all out. AI will sort it instantly.
+          </div>
+          {!dumpResult?(
+            <>
+              <textarea value={dumpText} onChange={e=>setDumpText(e.target.value)} className="ta"
+                style={{minHeight:200,fontSize:14,lineHeight:1.8,letterSpacing:.01,fontFamily:"inherit"}}
+                placeholder="e.g. Need to call compliance team about Goldbet regs... Ultrabet reporting due Friday... Follow up accounting month-end..."
+                autoFocus/>
+              {dumpErr&&<div style={{color:"#DC2626",fontSize:12.5,marginTop:8}}>{dumpErr}</div>}
+              <div style={{display:"flex",gap:10,marginTop:14,alignItems:"center"}}>
+                <button className="btn btn-primary" style={{padding:"10px 28px",fontSize:14}} onClick={process} disabled={dumpLoading||!dumpText.trim()}>
+                  {dumpLoading?<span style={{display:"flex",alignItems:"center",gap:8}}><span className="typing-dots"><span/><span/><span/></span> Sorting...</span>:"⚡ Sort My Brain"}
+                </button>
+                {dumpText.length>0&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:"var(--ink-4)"}}>{dumpText.split(/\s+/).filter(Boolean).length} words</span>}
+              </div>
+            </>
+          ):(
+            <div>
+              {dumpResult.insights&&<div style={{background:"rgba(79,70,229,.08)",border:"1px solid rgba(79,70,229,.2)",borderRadius:10,padding:"12px 16px",marginBottom:16}}>
+                <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"var(--indigo)",letterSpacing:1.5,marginBottom:5,textTransform:"uppercase"}}>◎ WHAT THIS REVEALS</div>
+                <div style={{fontSize:13,color:"var(--ink-2)",lineHeight:1.7}}>{dumpResult.insights}</div>
+              </div>}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
+                {[{label:"TASKS",items:dumpResult.tasks||[],icon:"✓",color:"#2563EB",render:t=><div key={t.title} style={{fontSize:12,padding:"8px 10px",background:"var(--surface)",borderRadius:7,marginBottom:5}}><div style={{fontWeight:500,color:"var(--ink)",marginBottom:3}}>{t.title}</div><div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{t.brand&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:BRANDS.find(b=>b.id===t.brand)?.color||"var(--ink-4)"}}>{BRANDS.find(b=>b.id===t.brand)?.emoji} {t.brand}</span>}<span className={`badge ${t.priority==="urgent"?"badge-violet":t.priority==="high"?"badge-red":"badge-amber"}`}>{t.priority}</span></div></div>},
+                 {label:"REMINDERS",items:dumpResult.reminders||[],icon:"🔔",color:"#7C3AED",render:r=><div key={r.title} style={{fontSize:12,padding:"8px 10px",background:"var(--surface)",borderRadius:7,marginBottom:5}}><div style={{fontWeight:500,color:"var(--ink)",marginBottom:2}}>{r.title}</div><div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--ink-4)"}}>{r.date} {r.time}</div></div>},
+                 {label:"NOTES",items:dumpResult.notes||[],icon:"📌",color:"#D97706",render:n=><div key={n.title} style={{fontSize:12,padding:"8px 10px",background:"var(--surface)",borderRadius:7,marginBottom:5}}><div style={{fontWeight:500,color:"var(--ink)",marginBottom:2}}>{n.title||"Note"}</div><div style={{fontSize:11,color:"var(--ink-4)",lineHeight:1.5}}>{n.content?.slice(0,80)}</div></div>}
+                ].map(col=>(
+                  <div key={col.label}>
+                    <div style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:col.color,letterSpacing:1.5,marginBottom:8,textTransform:"uppercase"}}>{col.icon} {col.label} ({col.items.length})</div>
+                    {col.items.map(col.render)}
+                    {!col.items.length&&<div style={{fontSize:11,color:"var(--ink-4)",padding:"8px 0"}}>None found</div>}
+                  </div>
+                ))}
+              </div>
+              <div className="row gap8">
+                <button className="btn btn-primary" style={{padding:"10px 28px"}} onClick={applyAll}>✓ Add Everything to PRODASH</button>
+                <button className="btn btn-ghost" onClick={()=>setDumpResult(null)}>← Edit</button>
+                <button className="btn btn-ghost" onClick={()=>{setDumpText("");setDumpResult(null);}}>Start Over</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ══════════════════════════════════════════════════════════
+  //  WORK JOURNAL
+  // ══════════════════════════════════════════════════════════
+  const renderJournal=()=>{
+    const today=todayStr();
+    const [selDate,setSelDate]=useState(today);
+    const entry=data.journal?.[selDate]||{};
+    const [f,setF]=useState({worked:entry.worked||"",mattered:entry.mattered||"",mind:entry.mind||"",tomorrow:entry.tomorrow||""});
+    const [saved,setSaved]=useState(false);
+    const save=()=>{saveJournalEntry(selDate,f);setSaved(true);setTimeout(()=>setSaved(false),2000);showToast("Journal saved");};
+    const allEntries=Object.entries(data.journal||{}).sort((a,b)=>b[0].localeCompare(a[0]));
+    const todayLog=(data.timelog||[]).filter(l=>l.ts?.startsWith(today)&&l.type!=="session_start").slice(0,8);
+    return(
+      <div className="anim-up">
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+          <div><div className="section-title" style={{marginBottom:4}}>📖 WORK JOURNAL</div><div style={{fontSize:12,color:"var(--ink-4)"}}>Your private daily record. {allEntries.length} entries so far.</div></div>
+          <input type="date" className="inp" style={{width:160}} value={selDate} onChange={e=>{setSelDate(e.target.value);const ent=data.journal?.[e.target.value]||{};setF({worked:ent.worked||"",mattered:ent.mattered||"",mind:ent.mind||"",tomorrow:ent.tomorrow||""}); setSaved(false);}}/>
+        </div>
+        <div className="g2 gap14">
+          <div>
+            {selDate===today&&todayLog.length>0&&<div className="card mb14">
+              <div className="card-header"><span className="card-title">TODAY'S ACTIVITY (auto)</span></div>
+              {todayLog.map(l=><div key={l.id} style={{fontSize:12,color:"var(--ink-3)",padding:"5px 0",borderBottom:"1px solid var(--surface)"}}>{fmtTime(l.ts)} — {l.title}</div>)}
+            </div>}
+            {[{k:"worked",l:"What did you actually work on?",p:"Tasks completed, meetings, calls, research..."},
+              {k:"mattered",l:"What mattered most today?",p:"The one thing that moved the needle..."},
+              {k:"mind",l:"What's in your head right now?",p:"Worries, unfinished thoughts, things you're carrying..."},
+              {k:"tomorrow",l:"Tomorrow's single most important thing",p:"Just one. What would make tomorrow a success?"},
+            ].map(q=>(
+              <div className="form-group mb14" key={q.k}>
+                <label className="form-label" style={{fontSize:12.5,marginBottom:6}}>{q.l}</label>
+                <textarea className="ta" style={{minHeight:72,fontSize:13}} placeholder={q.p}
+                  value={f[q.k]} onChange={e=>setF(p=>({...p,[q.k]:e.target.value}))}/>
+              </div>
+            ))}
+            <button className="btn btn-primary" style={{padding:"10px 24px"}} onClick={save}>
+              {saved?"✓ Saved!":"💾 Save Entry"}
+            </button>
+          </div>
+          <div>
+            <div className="card">
+              <div className="card-header"><span className="card-title">PAST ENTRIES</span></div>
+              {!allEntries.length&&<div style={{fontSize:12,color:"var(--ink-4)",padding:"12px 0",textAlign:"center"}}>No entries yet — start today</div>}
+              {allEntries.slice(0,15).map(([date,ent])=>(
+                <div key={date} onClick={()=>{setSelDate(date);setF({worked:ent.worked||"",mattered:ent.mattered||"",mind:ent.mind||"",tomorrow:ent.tomorrow||""});setSaved(false);}}
+                  style={{padding:"10px 0",borderBottom:"1px solid var(--surface)",cursor:"pointer",transition:"opacity .1s"}} onMouseEnter={e=>e.currentTarget.style.opacity=".7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                    <span style={{fontFamily:"Martian Mono,monospace",fontSize:10,fontWeight:600,color:date===today?"#2563EB":"var(--ink-3)"}}>{date===today?"TODAY":fmtDate(date)}</span>
+                    <span style={{fontSize:10,color:"var(--ink-4)"}}>{[ent.worked,ent.mattered,ent.mind,ent.tomorrow].filter(Boolean).length}/4 filled</span>
+                  </div>
+                  {ent.mattered&&<div style={{fontSize:11.5,color:"var(--ink-3)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ent.mattered}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ══════════════════════════════════════════════════════════
+  //  GOALS / OKRs
+  // ══════════════════════════════════════════════════════════
+  const renderGoals=()=>{
+    const [showAdd,setShowAdd]=useState(false);
+    const [f,setF]=useState({title:"",description:"",targetDate:"",brand:"",category:"",targetValue:"",unit:""});
+    const goals=data.goals||[];
+    const active=goals.filter(g=>!g.done);const done=goals.filter(g=>g.done);
+    return(
+      <div className="anim-up">
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+          <div><div className="section-title" style={{marginBottom:4}}>🎯 GOALS</div><div style={{fontSize:12,color:"var(--ink-4)"}}>{active.length} active · {done.length} achieved</div></div>
+          <div className="row gap8">
+            <button className="ai-btn" disabled={insightLoading["goals"]} onClick={()=>fetchInsight("goals","Review my goals vs my current task/time data. Am I working on the right things? 3 specific insights.")}>◎ AI Review</button>
+            <button className="btn btn-primary btn-sm" onClick={()=>setShowAdd(p=>!p)}>+ New Goal</button>
+          </div>
+        </div>
+        {insights["goals"]&&<AIPanel insight={insights["goals"]} loading={false} label="◎ AI GOAL REVIEW"/>}
+        {showAdd&&(
+          <div className="card mb16" style={{borderColor:"rgba(37,99,235,.3)",background:"rgba(37,99,235,.03)"}}>
+            <div className="card-header"><span className="card-title">NEW GOAL</span><button className="modal-close" onClick={()=>setShowAdd(false)}>✕</button></div>
+            <div className="form-group mb10"><label className="form-label">Goal Title *</label><input className="inp" placeholder="e.g. Get all brands to A health grade by June" value={f.title} onChange={e=>setF(p=>({...p,title:e.target.value}))} autoFocus/></div>
+            <div className="form-row mb10">
+              <div className="form-group"><label className="form-label">Target Date</label><input className="inp" type="date" value={f.targetDate} onChange={e=>setF(p=>({...p,targetDate:e.target.value}))}/></div>
+              <div className="form-group"><label className="form-label">Brand (optional)</label>
+                <select className="sel" value={f.brand} onChange={e=>setF(p=>({...p,brand:e.target.value}))}><option value="">— All brands —</option>{BRANDS.map(b=><option key={b.id} value={b.id}>{b.emoji} {b.name}</option>)}</select>
+              </div>
+            </div>
+            <div className="form-group mb10"><label className="form-label">Description / Why this matters</label><textarea className="ta" style={{minHeight:60}} value={f.description} onChange={e=>setF(p=>({...p,description:e.target.value}))}/></div>
+            <div className="row gap8"><button className="btn btn-primary btn-sm" onClick={()=>{addGoal(f);setShowAdd(false);setF({title:"",description:"",targetDate:"",brand:"",category:"",targetValue:"",unit:""});}}>Add Goal</button><button className="btn btn-ghost btn-sm" onClick={()=>setShowAdd(false)}>Cancel</button></div>
+          </div>
+        )}
+        {!goals.length&&<div className="empty-state"><div className="empty-icon">🎯</div><div className="empty-title">No goals yet</div><div className="empty-desc">Set a goal to give your tasks meaning and direction</div></div>}
+        {active.map(g=>{
+          const brand=BRANDS.find(b=>b.id===g.brand);const daysLeft=g.targetDate?Math.ceil((new Date(g.targetDate)-new Date())/86400000):null;
+          return(
+            <div key={g.id} className="card mb10" style={{borderLeft:`3px solid ${brand?.color||"#2563EB"}`}}>
+              <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,fontWeight:600,color:"var(--ink)",marginBottom:6}}>{g.title}</div>
+                  {g.description&&<div style={{fontSize:12.5,color:"var(--ink-3)",marginBottom:8,lineHeight:1.6}}>{g.description}</div>}
+                  <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:10}}>
+                    {brand&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:brand.color}}>{brand.emoji} {brand.name}</span>}
+                    {daysLeft!==null&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:daysLeft<7?"#DC2626":daysLeft<30?"#D97706":"var(--ink-4)"}}>📅 {daysLeft>0?daysLeft+"d left":"Overdue"}</span>}
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{flex:1,height:6,background:"var(--surface)",borderRadius:99,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:g.progress+"%",background:brand?.color||"#2563EB",borderRadius:99,transition:"width .5s"}}/>
+                    </div>
+                    <span style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:"var(--ink-3)",width:30}}>{g.progress}%</span>
+                    <input type="range" min={0} max={100} value={g.progress} onChange={e=>updateGoalProgress(g.id,+e.target.value,+e.target.value===100)} style={{width:80}}/>
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:5}}>
+                  <button className="btn btn-primary btn-xs" onClick={()=>updateGoalProgress(g.id,100,true)}>✓ Done</button>
+                  <button className="task-del" style={{opacity:1}} onClick={()=>deleteGoal(g.id)}>✕</button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {done.length>0&&<div>
+          <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"#059669",letterSpacing:2,margin:"16px 0 10px",textTransform:"uppercase"}}>✓ ACHIEVED ({done.length})</div>
+          {done.map(g=><div key={g.id} style={{display:"flex",gap:10,padding:"10px 14px",border:"1px solid var(--line)",borderRadius:8,marginBottom:6,opacity:.6}}>
+            <span style={{fontSize:16}}>🏆</span><div style={{flex:1}}><div style={{fontSize:13,fontWeight:500,color:"var(--ink)",textDecoration:"line-through"}}>{g.title}</div><div style={{fontSize:10.5,color:"var(--ink-4)",marginTop:2}}>Achieved {fmtDate(g.doneAt)}</div></div>
+            <button className="task-del" style={{opacity:1}} onClick={()=>deleteGoal(g.id)}>✕</button>
+          </div>)}
+        </div>}
+      </div>
+    );
+  };
+
+  // ══════════════════════════════════════════════════════════
+  //  DECISION LOG
+  // ══════════════════════════════════════════════════════════
+  const renderDecisions=()=>{
+    const [showAdd,setShowAdd]=useState(false);
+    const [f,setF]=useState({title:"",context:"",decision:"",reasoning:"",brand:""});
+    const decisions=data.decisions||[];
+    return(
+      <div className="anim-up">
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+          <div><div className="section-title" style={{marginBottom:4}}>⚖ DECISION LOG</div><div style={{fontSize:12,color:"var(--ink-4)"}}>{decisions.length} decisions recorded</div></div>
+          <div className="row gap8">
+            <button className="ai-btn" disabled={insightLoading["decisions"]} onClick={()=>fetchInsight("decisions","Analyse my decision patterns. What do I tend to decide? Any recurring themes or risks? 2-3 insights.")}>◎ AI Patterns</button>
+            <button className="btn btn-primary btn-sm" onClick={()=>setShowAdd(p=>!p)}>+ Log Decision</button>
+          </div>
+        </div>
+        {insights["decisions"]&&<AIPanel insight={insights["decisions"]} loading={false} label="◎ DECISION PATTERNS"/>}
+        {showAdd&&(
+          <div className="card mb16" style={{borderColor:"rgba(124,58,237,.3)"}}>
+            <div className="card-header"><span className="card-title">LOG A DECISION</span><button className="modal-close" onClick={()=>setShowAdd(false)}>✕</button></div>
+            <div className="form-group mb10"><label className="form-label">Decision Title *</label><input className="inp" placeholder="e.g. Delayed Goldbet compliance audit until Q3" value={f.title} onChange={e=>setF(p=>({...p,title:e.target.value}))} autoFocus/></div>
+            <div className="form-row mb10">
+              <div className="form-group"><label className="form-label">Brand</label>
+                <select className="sel" value={f.brand} onChange={e=>setF(p=>({...p,brand:e.target.value}))}><option value="">— General —</option>{BRANDS.map(b=><option key={b.id} value={b.id}>{b.emoji} {b.name}</option>)}</select>
+              </div>
+            </div>
+            <div className="form-group mb10"><label className="form-label">Context — what situation led to this?</label><textarea className="ta" style={{minHeight:60}} placeholder="What was happening? What were the options?" value={f.context} onChange={e=>setF(p=>({...p,context:e.target.value}))}/></div>
+            <div className="form-group mb10"><label className="form-label">The decision made</label><textarea className="ta" style={{minHeight:48}} placeholder="Exactly what was decided..." value={f.decision} onChange={e=>setF(p=>({...p,decision:e.target.value}))}/></div>
+            <div className="form-group mb14"><label className="form-label">Reasoning — why this choice?</label><textarea className="ta" style={{minHeight:60}} placeholder="Why was this the right call?" value={f.reasoning} onChange={e=>setF(p=>({...p,reasoning:e.target.value}))}/></div>
+            <div className="row gap8"><button className="btn btn-primary btn-sm" onClick={()=>{addDecision(f);setShowAdd(false);setF({title:"",context:"",decision:"",reasoning:"",brand:""});}}>Log Decision</button><button className="btn btn-ghost btn-sm" onClick={()=>setShowAdd(false)}>Cancel</button></div>
+          </div>
+        )}
+        {!decisions.length&&<div className="empty-state"><div className="empty-icon">⚖</div><div className="empty-title">No decisions logged</div><div className="empty-desc">Start recording important decisions. In 6 months you'll see clear patterns in your thinking.</div></div>}
+        {decisions.map(d=>{const brand=BRANDS.find(b=>b.id===d.brand);return(
+          <div key={d.id} className="card mb10">
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                  <div style={{fontSize:14,fontWeight:600,color:"var(--ink)"}}>{d.title}</div>
+                  {brand&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:brand.color}}>{brand.emoji} {brand.name}</span>}
+                </div>
+                {d.context&&<div style={{marginBottom:8}}><span className="form-label">CONTEXT</span><div style={{fontSize:12.5,color:"var(--ink-3)",lineHeight:1.6,marginTop:2}}>{d.context}</div></div>}
+                {d.decision&&<div style={{marginBottom:8,background:"rgba(37,99,235,.06)",borderRadius:7,padding:"8px 12px"}}><span className="form-label">DECISION</span><div style={{fontSize:12.5,color:"var(--ink-2)",lineHeight:1.6,marginTop:2,fontWeight:500}}>{d.decision}</div></div>}
+                {d.reasoning&&<div><span className="form-label">REASONING</span><div style={{fontSize:12.5,color:"var(--ink-3)",lineHeight:1.6,marginTop:2}}>{d.reasoning}</div></div>}
+                <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--ink-4)",marginTop:8}}>{fmtDateTime(d.createdAt)}</div>
+              </div>
+              <button className="task-del" style={{opacity:1}} onClick={()=>deleteDecision(d.id)}>✕</button>
+            </div>
+          </div>
+        );})}
+      </div>
+    );
+  };
+
+  // ══════════════════════════════════════════════════════════
+  //  WEEKLY PLAN
+  // ══════════════════════════════════════════════════════════
+  const renderWeekPlan=()=>{
+    const today=todayStr();const weekNum=Math.floor(Date.now()/604800000);
+    const thisWeek=weeklyReviews.find(w=>w.week===weekNum)||{};
+    const [rating,setRating]=useState(thisWeek.rating||0);
+    const [reflection,setReflection]=useState(thisWeek.reflection||"");
+    const [nextWeek,setNextWeek]=useState(thisWeek.nextWeek||"");
+    const allTasks=Object.values(data.tasks).flat();
+    const weekAgo=new Date(Date.now()-7*86400000).toISOString().split("T")[0];
+    const weekDone=allTasks.filter(t=>t.done&&t.doneAt>=weekAgo);
+    const upcoming=data.reminders.filter(r=>r.date>=today).slice(0,6);
+    const dueSoon=allTasks.filter(t=>!t.done&&t.due&&t.due>=today&&t.due<=new Date(Date.now()+7*86400000).toISOString().split("T")[0]).sort((a,b)=>a.due.localeCompare(b.due));
+    const stale=allTasks.filter(t=>!t.done&&taskAgeDays(t.createdAt)>14).slice(0,5);
+    const taskDebt=allTasks.filter(t=>!t.done&&taskAgeDays(t.createdAt)>14);
+    const debtHours=taskDebt.reduce((s,t)=>s+(t.estimatedMins||30),0)/60;
+    const saveReview=()=>{const r={week:weekNum,date:today,rating,reflection,nextWeek};const upd=[...weeklyReviews.filter(w=>w.week!==weekNum),r];setWeeklyReviews(upd);saveWeekly(upd);showToast("Weekly review saved");};
+    return(
+      <div className="anim-up">
+        <div className="section-title" style={{marginBottom:4}}>📅 WEEKLY PLAN</div>
+        <div style={{fontSize:12,color:"var(--ink-4)",marginBottom:20}}>Plan your week, track your commitment, review your performance.</div>
+
+        {/* Task debt */}
+        {taskDebt.length>0&&<div style={{background:"rgba(220,38,38,.06)",border:"1px solid rgba(220,38,38,.2)",borderRadius:12,padding:"14px 18px",marginBottom:16}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+            <span style={{fontSize:18}}>💳</span>
+            <div style={{fontFamily:"Martian Mono,monospace",fontSize:12,fontWeight:700,color:"#DC2626"}}>TASK DEBT: {taskDebt.length} tasks ({debtHours.toFixed(1)} hours owed)</div>
+          </div>
+          <div style={{fontSize:12.5,color:"var(--ink-3)",marginBottom:10}}>These tasks have been pending for 14+ days. They are debt accumulating against your productivity.</div>
+          {stale.map(t=>{const[bId,tab]=t.key?.split("_")||[];const brand=BRANDS.find(b=>b.id===bId);return(
+            <div key={t.id} style={{display:"flex",gap:10,padding:"7px 0",borderBottom:"1px solid rgba(220,38,38,.1)",alignItems:"center"}}>
+              <div style={{flex:1}}><div style={{fontSize:12.5,fontWeight:500,color:"var(--ink)"}}>{t.title}</div><div style={{fontSize:10.5,color:"var(--ink-4)"}}>{brand?.emoji} {brand?.name} · {Math.floor(taskAgeDays(t.createdAt))}d old</div></div>
+              <button className="btn btn-ghost btn-xs" onClick={()=>{setActiveBrand(bId);setBrandTab(tab);setView("brand");}}>View</button>
+            </div>
+          );})}
+          {taskDebt.length>5&&<div style={{fontSize:11,color:"rgba(220,38,38,.6)",marginTop:6}}>+{taskDebt.length-5} more in task debt</div>}
+        </div>}
+
+        {/* Accountability */}
+        <div className="card mb14">
+          <div className="card-header"><span className="card-title">🤝 WEEKLY COMMITMENT</span></div>
+          {acctData.lastWeekCommit>0&&<div style={{padding:"10px 0",borderBottom:"1px solid var(--surface)",marginBottom:12}}>
+            <div style={{fontSize:12.5,color:"var(--ink-3)"}}>Last week you committed to <strong>{acctData.lastWeekCommit}</strong> tasks. You completed <strong>{acctData.lastWeekDone}</strong>.</div>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginTop:8}}>
+              <div style={{flex:1,height:6,background:"var(--surface)",borderRadius:99}}>
+                <div style={{height:"100%",width:Math.min(100,acctData.lastWeekPct)+"%",background:acctData.lastWeekPct>=100?"#059669":acctData.lastWeekPct>=70?"#D97706":"#DC2626",borderRadius:99}}/>
+              </div>
+              <span style={{fontFamily:"Martian Mono,monospace",fontSize:11,fontWeight:600,color:acctData.lastWeekPct>=100?"#059669":acctData.lastWeekPct>=70?"#D97706":"#DC2626"}}>{acctData.lastWeekPct}% follow-through</span>
+            </div>
+          </div>}
+          <div style={{fontSize:12.5,color:"var(--ink-3)",marginBottom:10}}>This week I commit to completing <strong>{acctData.commitment||"?"}</strong> tasks.</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {[5,10,15,20,25,30].map(n=><button key={n} className={`btn btn-xs ${acctData.commitment===n?"btn-primary":"btn-ghost"}`} onClick={()=>setCommitment(n)}>{n}</button>)}
+          </div>
+          {acctData.commitment>0&&<div style={{marginTop:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}><span style={{fontSize:12,color:"var(--ink-3)"}}>Progress this week</span><span style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:"#2563EB"}}>{stats.weekDone}/{acctData.commitment}</span></div>
+            <div style={{height:8,background:"var(--surface)",borderRadius:99,overflow:"hidden"}}>
+              <div style={{height:"100%",width:Math.min(100,Math.round(stats.weekDone/acctData.commitment*100))+"%",background:"#2563EB",borderRadius:99,transition:"width .5s"}}/>
+            </div>
+          </div>}
+        </div>
+
+        <div className="g2 gap14 mb14">
+          {/* Due this week */}
+          <div className="card">
+            <div className="card-header"><span className="card-title">DUE THIS WEEK ({dueSoon.length})</span></div>
+            {!dueSoon.length&&<div style={{fontSize:12,color:"var(--ink-4)",padding:"8px 0"}}>Nothing due this week</div>}
+            {dueSoon.map(t=>{const[bId,tab]=t.key?.split("_")||[];const brand=BRANDS.find(b=>b.id===bId);return(
+              <div key={t.id} style={{display:"flex",gap:8,padding:"8px 0",borderBottom:"1px solid var(--surface)",alignItems:"center"}}>
+                <div style={{flex:1}}><div style={{fontSize:12.5,fontWeight:500,color:"var(--ink)"}}>{t.title}</div><div style={{fontSize:10.5,color:"var(--ink-4)",marginTop:2}}>{brand?.emoji} {brand?.name} · Due {fmtDate(t.due)}</div></div>
+                <span className={`badge ${t.priority==="urgent"?"badge-violet":t.priority==="high"?"badge-red":"badge-amber"}`}>{t.priority}</span>
+              </div>
+            );})}
+          </div>
+          {/* Upcoming reminders */}
+          <div className="card">
+            <div className="card-header"><span className="card-title">UPCOMING REMINDERS</span></div>
+            {!upcoming.length&&<div style={{fontSize:12,color:"var(--ink-4)",padding:"8px 0"}}>No upcoming reminders</div>}
+            {upcoming.map(r=>{const brand=BRANDS.find(b=>b.id===r.brand);return(
+              <div key={r.id} style={{display:"flex",gap:8,padding:"8px 0",borderBottom:"1px solid var(--surface)",alignItems:"center"}}>
+                <span style={{fontSize:14}}>🔔</span>
+                <div style={{flex:1}}><div style={{fontSize:12.5,fontWeight:500}}>{r.title}</div><div style={{fontSize:10.5,color:"var(--ink-4)",marginTop:2}}>{fmtDate(r.date)}{brand?` · ${brand.emoji} ${brand.name}`:""}</div></div>
+              </div>
+            );})}
+          </div>
+        </div>
+
+        {/* Weekly review */}
+        <div className="card">
+          <div className="card-header"><span className="card-title">THIS WEEK'S REVIEW</span><span style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--ink-4)"}}>{weekDone.length} tasks completed</span></div>
+          <div style={{marginBottom:14}}>
+            <div className="form-label" style={{marginBottom:8}}>Rate your week</div>
+            <div style={{display:"flex",gap:8}}>
+              {[1,2,3,4,5].map(n=><button key={n} onClick={()=>setRating(n)} style={{width:40,height:40,borderRadius:8,border:`2px solid ${rating>=n?"#F59E0B":"var(--line)"}`,background:rating>=n?"rgba(245,158,11,.1)":"transparent",fontSize:18,cursor:"pointer"}}>{"⭐"}</button>)}
+              {rating>0&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:"#F59E0B",alignSelf:"center",marginLeft:4}}>{["","POOR","BELOW AVERAGE","AVERAGE","GOOD","EXCELLENT"][rating]}</span>}
+            </div>
+          </div>
+          <div className="form-group mb10"><label className="form-label">What worked, what didn't?</label><textarea className="ta" style={{minHeight:72}} value={reflection} onChange={e=>setReflection(e.target.value)} placeholder="Wins, misses, surprises..."/></div>
+          <div className="form-group mb14"><label className="form-label">What will I do differently next week?</label><textarea className="ta" style={{minHeight:60}} value={nextWeek} onChange={e=>setNextWeek(e.target.value)} placeholder="One specific change..."/></div>
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            <button className="btn btn-primary btn-sm" onClick={saveReview}>💾 Save Review</button>
+            {weeklyReviews.length>0&&<span style={{fontSize:12,color:"var(--ink-4)"}}>{weeklyReviews.length} past reviews saved</span>}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderAI=()=>(
     <div className="anim-up">
       <div className="g2 gap14">
@@ -2126,11 +2769,124 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
   // ══════════════════════════════════════════════════════════
   //  MAIN RETURN
   // ══════════════════════════════════════════════════════════
-  const pageTitle=view==="brand"&&currentBrand?currentBrand.name.toUpperCase():{dashboard:"DASHBOARD",timelog:"TIME LOG",analytics:"ANALYTICS",calendar:"CALENDAR",pinboard:"PIN BOARD",ai:"AI ASSISTANT"}[view]||"";
+  const pageTitle=view==="brand"&&currentBrand?currentBrand.name.toUpperCase():{dashboard:"DASHBOARD",warroom:"WAR ROOM",timelog:"TIME LOG",analytics:"ANALYTICS",calendar:"CALENDAR",pinboard:"PIN BOARD",ai:"AI ASSISTANT",journal:"WORK JOURNAL",goals:"GOALS",decisions:"DECISION LOG",braindump:"BRAIN DUMP",weekplan:"WEEKLY PLAN"}[view]||"";
 
   return (
     <div className="app">
       {showConfetti&&<Confetti/>}
+      {/* Morning prompt */}
+      {showMorningPrompt&&missedTasks.length>0&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+          <div style={{background:"var(--white)",borderRadius:16,padding:"28px 32px",maxWidth:480,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+            <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"#D97706",letterSpacing:3,marginBottom:12,textTransform:"uppercase"}}>☀ GOOD MORNING</div>
+            <div style={{fontSize:18,fontWeight:700,color:"var(--ink)",marginBottom:8,lineHeight:1.3}}>Yesterday you meant to...</div>
+            <div style={{fontSize:13,color:"var(--ink-3)",marginBottom:18}}>{missedTasks.length} task{missedTasks.length>1?"s were":"was"} due yesterday and not completed.</div>
+            {missedTasks.slice(0,4).map(t=>(
+              <div key={t.id} style={{display:"flex",gap:10,padding:"9px 12px",background:"var(--surface)",borderRadius:8,marginBottom:7,alignItems:"center"}}>
+                <span style={{fontSize:13,fontWeight:500,color:"var(--ink)",flex:1}}>{t.title}</span>
+                <span className={`badge ${t.priority==="urgent"?"badge-violet":t.priority==="high"?"badge-red":"badge-amber"}`}>{t.priority}</span>
+              </div>
+            ))}
+            <div style={{display:"flex",gap:10,marginTop:18}}>
+              <button className="btn btn-primary flex1" onClick={()=>{setShowMorningPrompt(false);setView("warroom");}}>Deal with them now ⚔</button>
+              <button className="btn btn-ghost" onClick={()=>setShowMorningPrompt(false)}>Dismiss</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* EOD Summary */}
+      {showEOD&&!eodDismissed&&(
+        <div style={{position:"fixed",bottom:24,right:24,background:"linear-gradient(135deg,#059669,#047857)",borderRadius:14,padding:"16px 20px",maxWidth:320,zIndex:200,boxShadow:"0 8px 32px rgba(5,150,105,.4)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+            <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"rgba(255,255,255,.6)",letterSpacing:2,textTransform:"uppercase"}}>END OF DAY</div>
+            <button onClick={()=>setEodDismissed(true)} style={{background:"none",border:"none",color:"rgba(255,255,255,.5)",cursor:"pointer",fontSize:14,lineHeight:1}}>✕</button>
+          </div>
+          <div style={{fontSize:20,fontWeight:700,color:"#fff",marginBottom:4}}>Today: {stats.todayDone} tasks done</div>
+          <div style={{fontSize:13,color:"rgba(255,255,255,.8)",marginBottom:6}}>Across {bStats.filter(b=>b.done>0).length} brands · {fmtDur(stats.totalTimeSpent)} tracked</div>
+          {streak.current>0&&<div style={{fontSize:13,color:"rgba(255,255,255,.9)",fontWeight:600}}>🔥 {streak.current} day streak — keep it going!</div>}
+          <button onClick={()=>{setEodDismissed(true);setView("journal");}} style={{marginTop:12,width:"100%",padding:"8px",background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.3)",borderRadius:8,color:"#fff",cursor:"pointer",fontSize:13,fontWeight:500}}>📖 Write today's journal entry →</button>
+        </div>
+      )}
+      {/* PRODASH RADIO — ambient focus mode */}
+      {radioMode&&(
+        <div style={{position:"fixed",inset:0,background:"#05060F",zIndex:400,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+          <div style={{position:"absolute",top:20,right:20}}>
+            <button onClick={()=>setRadioMode(false)} style={{background:"rgba(255,255,255,.07)",border:"1px solid rgba(255,255,255,.1)",borderRadius:8,color:"rgba(255,255,255,.4)",fontSize:12,padding:"6px 14px",cursor:"pointer",fontFamily:"Martian Mono,monospace"}}>EXIT RADIO</button>
+          </div>
+          {/* Ambient animated background */}
+          <div style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none"}}>
+            {[...Array(6)].map((_,i)=>(
+              <div key={i} style={{position:"absolute",borderRadius:"50%",
+                width:300+i*120,height:300+i*120,
+                left:`${10+i*12}%`,top:`${5+i*10}%`,
+                background:`rgba(${i%2?37:79},${i%2?99:70},${i%2?235:229},.03)`,
+                animation:`ambient-pulse ${4+i}s ${i*.5}s ease-in-out infinite alternate`}}/>
+            ))}
+          </div>
+          <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"rgba(255,255,255,.2)",letterSpacing:6,marginBottom:48,textTransform:"uppercase",position:"relative"}}>PRODASH RADIO · FOCUS</div>
+          {missionTask&&!missionDone?(
+            <div style={{textAlign:"center",maxWidth:560,position:"relative"}}>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"rgba(37,99,235,.6)",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>TODAY'S MISSION</div>
+              <div style={{fontSize:32,fontWeight:700,color:"#fff",lineHeight:1.3,marginBottom:24,letterSpacing:-.5}}>{missionTask.title}</div>
+              <button onClick={completeMission} style={{padding:"12px 36px",background:"rgba(37,99,235,.2)",border:"1px solid rgba(37,99,235,.4)",borderRadius:10,color:"rgba(255,255,255,.8)",fontSize:14,cursor:"pointer",fontFamily:"Martian Mono,monospace",letterSpacing:1}}>MARK COMPLETE</button>
+            </div>
+          ):(
+            <div style={{textAlign:"center",position:"relative"}}>
+              {missionDone&&<div style={{fontSize:48,marginBottom:16}}>🏆</div>}
+              <div style={{fontSize:28,fontWeight:700,color:"#fff",marginBottom:8}}>{missionDone?"Mission Complete":"Ready to Focus"}</div>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:"rgba(255,255,255,.3)"}}>{new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}</div>
+            </div>
+          )}
+          <div style={{position:"absolute",bottom:32,display:"flex",gap:24,alignItems:"center"}}>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:22,fontWeight:700,color:"#fff"}}>{stats.todayDone}</div>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"rgba(255,255,255,.25)",letterSpacing:2,marginTop:4,textTransform:"uppercase"}}>done today</div>
+            </div>
+            <div style={{width:1,height:32,background:"rgba(255,255,255,.1)"}}/>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:22,fontWeight:700,color:stats.overdue>0?"#DC2626":"#059669"}}>{stats.overdue}</div>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"rgba(255,255,255,.25)",letterSpacing:2,marginTop:4,textTransform:"uppercase"}}>overdue</div>
+            </div>
+            <div style={{width:1,height:32,background:"rgba(255,255,255,.1)"}}/>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:22,fontWeight:700,color:"#F59E0B"}}>{streak.current||0}</div>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"rgba(255,255,255,.25)",letterSpacing:2,marginTop:4,textTransform:"uppercase"}}>day streak 🔥</div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Voice capture overlay */}
+      {voiceActive&&(
+        <div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",background:"rgba(5,6,15,.95)",border:"1px solid rgba(37,99,235,.4)",borderRadius:16,padding:"20px 32px",zIndex:300,textAlign:"center",minWidth:320,boxShadow:"0 8px 40px rgba(37,99,235,.3)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,justifyContent:"center",marginBottom:10}}>
+            <div style={{width:10,height:10,borderRadius:"50%",background:"#DC2626",animation:"live-pulse .8s ease-in-out infinite"}}/>
+            <span style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:"rgba(255,255,255,.5)",letterSpacing:2,textTransform:"uppercase"}}>LISTENING</span>
+          </div>
+          <div style={{fontSize:14,color:"#fff",minHeight:20,lineHeight:1.5}}>{voiceText||"Speak now..."}</div>
+          <button onClick={stopVoice} style={{marginTop:12,padding:"6px 20px",background:"#DC2626",border:"none",borderRadius:8,color:"#fff",fontSize:12,cursor:"pointer"}}>Stop</button>
+        </div>
+      )}
+      {/* What-If Simulator Modal */}
+      {showWhatIf&&(
+        <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&setShowWhatIf(false)}>
+          <div className="modal-box" style={{maxWidth:560}}>
+            <div className="modal-title"><span>🔮 WHAT-IF SIMULATOR</span><button className="modal-close" onClick={()=>setShowWhatIf(false)}>✕</button></div>
+            <div style={{fontSize:12.5,color:"var(--ink-3)",marginBottom:14,lineHeight:1.7}}>Describe a hypothetical scenario. AI models the impact on your brands, health grades, and risks.</div>
+            <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:12}}>
+              {["What if I deprioritised Ultrabet for 2 weeks?","What if I focused only on Compliance tasks this month?","What if I doubled time on Goldbet and cut AllBets?","What if I hired someone to handle Accounting tasks?"].map(s=>(
+                <span key={s} onClick={()=>setWhatIfInput(s)} style={{fontSize:11,padding:"4px 10px",background:"var(--surface)",borderRadius:99,cursor:"pointer",color:"var(--ink-3)",border:"1px solid var(--line)"}}>{s}</span>
+              ))}
+            </div>
+            <textarea className="ta" style={{minHeight:80}} placeholder="What if..." value={whatIfInput} onChange={e=>setWhatIfInput(e.target.value)} autoFocus/>
+            {whatIfLoading&&<div style={{display:"flex",gap:8,alignItems:"center",padding:"12px 0",color:"var(--ink-3)",fontSize:13}}><span className="typing-dots"><span/><span/><span/></span>Simulating scenario...</div>}
+            {whatIfResult&&!whatIfLoading&&<div style={{background:"rgba(79,70,229,.06)",border:"1px solid rgba(79,70,229,.2)",borderRadius:10,padding:"14px 16px",marginTop:12,fontSize:13,color:"var(--ink-2)",lineHeight:1.8}}>{whatIfResult}</div>}
+            <div className="row gap8" style={{marginTop:14}}>
+              <button className="btn btn-primary flex1" onClick={()=>runWhatIf(whatIfInput)} disabled={whatIfLoading||!whatIfInput.trim()}>🔮 Simulate</button>
+              <button className="btn btn-ghost" onClick={()=>setShowWhatIf(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
       {focusMode&&<FocusOverlay
         task={focusMode.task} secs={focusSecs} running={focusRunning}
         elapsed={focusStarted?Date.now()-focusStarted:0}
@@ -2183,6 +2939,11 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
           </div>
           <div className="sidebar-prog"><div className="sidebar-prog-fill" style={{width:`${stats.rate}%`}}/></div>
           <div className="sidebar-rate">{stats.rate}% completion · Score {score}</div>
+          {Object.values(data.tasks).flat().filter(t=>!t.done&&taskAgeDays(t.createdAt)>14).length>0&&(
+            <div style={{marginTop:8,padding:"6px 10px",background:"rgba(220,38,38,.08)",borderRadius:6,border:"1px solid rgba(220,38,38,.2)"}}>
+              <span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"#DC2626",fontWeight:600}}>💳 {Object.values(data.tasks).flat().filter(t=>!t.done&&taskAgeDays(t.createdAt)>14).length} TASK DEBT</span>
+            </div>
+          )}
           <div style={{display:"flex",gap:6,marginTop:10}}>
             <button className="btn btn-ghost btn-xs w-full" style={{fontSize:10}} onClick={exportData}>↓ Export</button>
             <label className="btn btn-ghost btn-xs w-full" style={{fontSize:10,cursor:"pointer",textAlign:"center"}}>
@@ -2222,13 +2983,16 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
               <span style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:dbStatus==="ok"?"#059669":dbStatus==="loading"?"#2563EB":"#DC2626",fontWeight:600,letterSpacing:.5}}>{dbStatus==="ok"?"CLOUD":dbStatus==="loading"?"SYNC...":"LOCAL"}</span>
             </div>
             {stats.overdue>0&&<button onClick={()=>setView("warroom")} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",background:"rgba(220,38,38,.1)",border:"1px solid rgba(220,38,38,.3)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"#DC2626",cursor:"pointer",fontWeight:600}}>⚔ WAR ROOM <span style={{background:"#DC2626",color:"#fff",borderRadius:99,padding:"0 5px",fontSize:7.5,marginLeft:2}}>{stats.overdue}</span></button>}
+            <button onClick={()=>setRadioMode(true)} title="PRODASH Radio — ambient focus mode" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>📻 Radio</button>
+            <button onClick={()=>setShowWhatIf(true)} title="What-If Simulator" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>🔮 What-If</button>
+            <button onClick={startVoice} title="Voice capture" style={{padding:"4px 10px",background:voiceActive?"rgba(220,38,38,.15)":"transparent",border:`1px solid ${voiceActive?"rgba(220,38,38,.5)":"var(--line)"}`,borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:voiceActive?"#DC2626":"var(--ink-3)",cursor:"pointer"}}>🎤 {voiceActive?"…":""}</button>
             <div className="topbar-date">{new Date().toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"})}</div>
             <div className="topbar-dot" style={{background:"#4ADE80",boxShadow:"0 0 8px #4ADE80"}}/>
           </div>
         </div>
 
         {/* Quick add bar */}
-        {(view==="dashboard"||view==="brand")&&(
+        {(view==="dashboard"||view==="brand"||view==="goals"||view==="weekplan")&&(
           <div style={{background:"var(--ai-bg)",borderBottom:"1px solid var(--ai-border)",padding:"8px 26px",display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
             <span style={{fontFamily:"Martian Mono,monospace",fontSize:7.5,color:"var(--indigo)",letterSpacing:2,textTransform:"uppercase",whiteSpace:"nowrap"}}>QUICK ADD</span>
             <input className="inp" style={{flex:1,maxWidth:420,padding:"6px 12px",fontSize:12.5,background:"rgba(255,255,255,.7)",border:"1px solid var(--ai-border)"}}
@@ -2249,6 +3013,11 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
           {view==="calendar" &&renderCalendar()}
           {view==="pinboard" &&renderPinboard()}
           {view==="ai"       &&renderAI()}
+          {view==="journal"  &&renderJournal()}
+          {view==="goals"    &&renderGoals()}
+          {view==="decisions"&&renderDecisions()}
+          {view==="braindump"&&renderBrainDump()}
+          {view==="weekplan" &&renderWeekPlan()}
         </div>
       </div>
 
@@ -2270,6 +3039,27 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
           </div>
         </div>
       )}
+      {/* Floating quick capture */}
+      {view!=="braindump"&&<div style={{position:"fixed",bottom:24,left:220,zIndex:100}}>
+        <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+          <button onClick={()=>setShowBrainDump(p=>!p)} title="Brain Dump (⚡)" style={{width:46,height:46,borderRadius:99,background:"linear-gradient(135deg,#7C3AED,#4F46E5)",border:"none",color:"#fff",fontSize:20,cursor:"pointer",boxShadow:"0 4px 20px rgba(124,58,237,.5)",transition:"transform .15s",display:"flex",alignItems:"center",justifyContent:"center"}}
+            onMouseEnter={e=>e.currentTarget.style.transform="scale(1.1)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>⚡</button>
+          {showBrainDump&&(
+            <div style={{background:"var(--white)",borderRadius:14,padding:"12px 14px",boxShadow:"var(--s3)",border:"1px solid var(--line)",width:280,marginBottom:0}}>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--indigo)",letterSpacing:1.5,marginBottom:8,textTransform:"uppercase"}}>⚡ QUICK CAPTURE</div>
+              <textarea className="ta" style={{minHeight:80,fontSize:13,marginBottom:8}}
+                placeholder="Quick task, thought, reminder... just type it all"
+                autoFocus
+                onKeyDown={e=>{if(e.key==="Enter"&&e.ctrlKey){const text=e.target.value.trim();if(text){addTask({title:text,priority:"medium",brand:activeBrand||"goldbet",tab:brandTab});e.target.value="";setShowBrainDump(false);showToast("Added!");}else{setShowBrainDump(false);setView("braindump");}}}}/>
+              <div style={{display:"flex",gap:6}}>
+                <button className="btn btn-primary btn-xs flex1" onClick={()=>{setShowBrainDump(false);setView("braindump");}}>⚡ Full Brain Dump</button>
+                <button className="btn btn-ghost btn-xs" onClick={()=>setShowBrainDump(false)}>✕</button>
+              </div>
+              <div style={{fontSize:10,color:"var(--ink-4)",marginTop:6}}>Ctrl+Enter = quick add task</div>
+            </div>
+          )}
+        </div>
+      </div>}
       <ToastContainer toasts={toasts}/>
     </div>
   );
