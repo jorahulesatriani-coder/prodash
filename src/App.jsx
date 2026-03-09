@@ -63,8 +63,38 @@ const fmtDuration = (ms) => {
   return h?`${h}h ${m}m`:`${m}m`;
 };
 
+// ══════════════════════════════════════
+//  SUPABASE CONFIG
+// ══════════════════════════════════════
+const SB_URL  = "https://qkuhrlmbkicggnkogdew.supabase.co";
+const SB_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFrdWhybG1ia2ljZ2dua29nZGV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwMjE5ODUsImV4cCI6MjA4ODU5Nzk4NX0.ypH5J0rLzIuedEEgTJ5F2ZL9Okl_QI2hG-CioTvybhk";
+const SB_HEADERS = {"Content-Type":"application/json","apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`};
+
+const sbLoad = async () => {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/prodash_data?id=eq.main&select=data`,{headers:SB_HEADERS});
+    const rows = await res.json();
+    if (rows&&rows[0]?.data) {
+      const p=rows[0].data;
+      return {tasks:p.tasks||{},notes:p.notes||[],reminders:p.reminders||[],uploads:p.uploads||{},timelog:p.timelog||[],aiInsights:p.aiInsights||{},meta:p.meta||{createdAt:nowISO()}};
+    }
+    return emptyData();
+  } catch { return emptyData(); }
+};
+
+const sbSave = async (d) => {
+  try {
+    await fetch(`${SB_URL}/rest/v1/prodash_data`,{
+      method:"POST",
+      headers:{...SB_HEADERS,"Prefer":"resolution=merge-duplicates"},
+      body:JSON.stringify({id:"main",data:d,updated_at:nowISO()}),
+    });
+  } catch(e) { console.warn("Supabase save failed:",e); }
+};
+
 const emptyData = () => ({tasks:{},notes:[],reminders:[],uploads:{},timelog:[],aiInsights:{},meta:{createdAt:nowISO()}});
-const loadData = () => {
+const loadData  = () => {
+  // fallback to localStorage while Supabase loads
   try {
     const raw=localStorage.getItem(STORAGE_KEY);
     if(!raw) return emptyData();
@@ -72,7 +102,7 @@ const loadData = () => {
     return {tasks:p.tasks||{},notes:p.notes||[],reminders:p.reminders||[],uploads:p.uploads||{},timelog:p.timelog||[],aiInsights:p.aiInsights||{},meta:p.meta||{createdAt:nowISO()}};
   } catch { return emptyData(); }
 };
-const saveData = (d) => { try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));return true;}catch{return false;} };
+const saveLocal = (d) => { try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch{} };
 
 // ══════════════════════════════════════
 //  TOAST HOOK
@@ -384,10 +414,34 @@ export default function App() {
 
   const [activeTimers,setActiveTimers]=useState({});
   const [logFilter,setLogFilter]=useState("all");
+  const [dbStatus,setDbStatus]=useState("loading"); // "loading" | "ok" | "error"
   const chatEndRef=useRef(null);
+  const saveTimer=useRef(null);
   const {toasts,show:showToast}=useToast();
 
-  useEffect(()=>{saveData(data);},[data]);
+  // Load from Supabase on mount, fall back to localStorage
+  useEffect(()=>{
+    sbLoad().then(cloudData=>{
+      const allTasks=Object.values(cloudData.tasks||{}).flat();
+      if(allTasks.length>0||cloudData.notes?.length>0||cloudData.reminders?.length>0){
+        setData(cloudData);
+        saveLocal(cloudData);
+        setDbStatus("ok");
+      } else {
+        setDbStatus("ok");
+      }
+    }).catch(()=>setDbStatus("error"));
+  },[]);
+
+  // Debounced save to Supabase + localStorage on every data change
+  useEffect(()=>{
+    saveLocal(data);
+    clearTimeout(saveTimer.current);
+    saveTimer.current=setTimeout(()=>{
+      sbSave(data).then(()=>setDbStatus("ok")).catch(()=>setDbStatus("error"));
+    },1200);
+    return()=>clearTimeout(saveTimer.current);
+  },[data]);
   useEffect(()=>{chatEndRef.current?.scrollIntoView({behavior:"smooth"});},[chatMsgs]);
   useEffect(()=>{addLog("session_start","Session started",null,null,null);},[]);
 
@@ -1402,6 +1456,11 @@ YOUR MANDATE:
               </button>
             )}
             <div className="topbar-date">{new Date().toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"})}</div>
+            {/* Cloud sync indicator */}
+            <div title={dbStatus==="ok"?"Synced to cloud":dbStatus==="loading"?"Connecting...":"Sync error — data saved locally"} style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:99,background:dbStatus==="ok"?"#ECFDF5":dbStatus==="loading"?"#EEF2FF":"#FEF2F2",border:`1px solid ${dbStatus==="ok"?"#A7F3D0":dbStatus==="loading"?"#C7D2FE":"#FCA5A5"}`}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:dbStatus==="ok"?"#059669":dbStatus==="loading"?"#2563EB":"#DC2626",boxShadow:dbStatus==="ok"?"0 0 6px #059669":dbStatus==="loading"?"0 0 6px #2563EB":"none",animation:dbStatus==="loading"?"online-glow 1.5s infinite":"none"}}/>
+              <span style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:dbStatus==="ok"?"#059669":dbStatus==="loading"?"#2563EB":"#DC2626",fontWeight:600,letterSpacing:.5}}>{dbStatus==="ok"?"CLOUD":dbStatus==="loading"?"SYNC...":"LOCAL"}</span>
+            </div>
             <div className="topbar-dot" style={{background:"#4ADE80",boxShadow:"0 0 8px #4ADE80"}}/>
           </div>
         </div>
