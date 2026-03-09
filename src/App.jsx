@@ -19,7 +19,7 @@ const RECURRENCE  = [{key:"",label:"None"},{key:"daily",label:"Daily"},{key:"wee
 const PIN_COLORS  = ["#FFF9C4","#FFEEBA","#FFE0E0","#E0F4E0","#E0E8FF","#F3E8FF","#FFF0E0","#E0F8F8"];
 const MONTHS      = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const WEEKDAYS    = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-const STORAGE_KEY = "prodash_v7";
+const STORAGE_KEY = "prodash_v8";
 const KANBAN_COLS = ["todo","inprogress","done"];
 const KANBAN_LABELS = {todo:"To Do",inprogress:"In Progress",done:"Done"};
 const POMODORO_MINS = 25;
@@ -32,7 +32,9 @@ const healthGrade = (rate, overdue, total) => {
   if(s>=30) return {grade:"D",color:"#F97316",label:"Poor"};
   return {grade:"F",color:"#DC2626",label:"Critical"};
 };
-const taskAgeDays = (createdAt) => (Date.now() - new Date(createdAt)) / 86400000;
+const taskAgeDays    = (createdAt) => (Date.now() - new Date(createdAt)) / 86400000;
+const daysUntilDue   = (due) => { if(!due) return null; const d=Math.ceil((new Date(due)-new Date(todayStr()))/86400000); return d; };
+const dueBadge       = (due) => { const d=daysUntilDue(due); if(d===null) return null; if(d<0) return {label:`${Math.abs(d)}d overdue`,color:"#DC2626",bg:"#FEE2E2"}; if(d===0) return {label:"Due today",color:"#D97706",bg:"#FEF3C7"}; if(d===1) return {label:"Due tmrw",color:"#D97706",bg:"#FEF3C7"}; if(d<=3) return {label:`${d}d left`,color:"#D97706",bg:"#FEF3C7"}; if(d<=7) return {label:`${d}d left`,color:"#2563EB",bg:"#EFF6FF"}; return {label:`${d}d`,color:"#6B7280",bg:"var(--surface)"}; };
 const brandTemp = (b, tasks) => {
   // 0-100 temperature: activity + completion - overdue - aging
   const recency = tasks.filter(t=>t.done&&t.doneAt&&(Date.now()-new Date(t.doneAt))<3*86400000).length;
@@ -53,6 +55,9 @@ const WEEKLY_KEY     = "prodash_weekly";
 const loadWeekly     = () => { try{return JSON.parse(localStorage.getItem(WEEKLY_KEY)||"[]");}catch{return[];} };
 const saveWeekly     = w => { try{localStorage.setItem(WEEKLY_KEY,JSON.stringify(w));}catch{} };
 const ACCT_KEY       = "prodash_acct";
+const MOOD_KEY       = "prodash_mood";
+const loadMoods      = () => { try{return JSON.parse(localStorage.getItem(MOOD_KEY)||"[]");}catch{return[];} };
+const saveMoods      = m => { try{localStorage.setItem(MOOD_KEY,JSON.stringify(m));}catch{} };
 const loadAcct       = () => { try{return JSON.parse(localStorage.getItem(ACCT_KEY)||"{}")||{};}catch{return{};} };
 const saveAcct       = a => { try{localStorage.setItem(ACCT_KEY,JSON.stringify(a));}catch{} };
 const NAV_ITEMS = [
@@ -412,6 +417,25 @@ function GlobalSearch({data,onClose,onNavigate}) {
     data.reminders.forEach(r=>{
       if(r.title.toLowerCase().includes(ql)){
         results.push({type:"reminder",icon:"🔔",label:r.title,sub:`${fmtDate(r.date)} · ${r.time||""}`,color:"#7C3AED",action:()=>{onNavigate("calendar");onClose();}});
+      }
+    });
+    // goals
+    (data.goals||[]).forEach(g=>{
+      if(g.title.toLowerCase().includes(ql)||g.description?.toLowerCase().includes(ql)){
+        results.push({type:"goal",icon:"🎯",label:g.title,sub:`Goal · ${g.progress||0}% · ${g.achieved?"Achieved":"Active"}`,color:"#059669",action:()=>{onNavigate("goals");onClose();}});
+      }
+    });
+    // decisions
+    (data.decisions||[]).forEach(d=>{
+      if(d.title.toLowerCase().includes(ql)||d.decision?.toLowerCase().includes(ql)||d.context?.toLowerCase().includes(ql)){
+        results.push({type:"decision",icon:"⚖",label:d.title,sub:`Decision · ${fmtDate(d.createdAt)}`,color:"#7C3AED",action:()=>{onNavigate("decisions");onClose();}});
+      }
+    });
+    // journal
+    Object.entries(data.journal||{}).forEach(([date,entry])=>{
+      const text=(entry.worked||"")+" "+(entry.mattered||"")+" "+(entry.mind||"")+" "+(entry.tomorrow||"");
+      if(text.toLowerCase().includes(ql)){
+        results.push({type:"journal",icon:"📖",label:`Journal: ${fmtDate(date)}`,sub:text.slice(0,60)+"...",color:"#2563EB",action:()=>{onNavigate("journal");onClose();}});
       }
     });
     // brands
@@ -1115,6 +1139,17 @@ export default function App() {
   const [showTemplates,setShowTemplates] = useState(false);
   const [streak,setStreak]         = useState(loadStreak);
   const [scoreHistory,setScoreHistory]         = useState(loadScoreHist);
+  const [moods,setMoods]                       = useState(loadMoods);
+  const [showMoodCheck,setShowMoodCheck]       = useState(false);
+  const [todayMood,setTodayMood]               = useState(null);
+  const [brandColor,setBrandColor]             = useState(null);
+  const [showNarrative,setShowNarrative]       = useState(false);
+  const [narrativeText,setNarrativeText]       = useState("");
+  const [narrativeLoading,setNarrativeLoading] = useState(false);
+  const [profileText,setProfileText]           = useState("");
+  const [profileLoading,setProfileLoading]     = useState(false);
+  const [showProfile,setShowProfile]           = useState(false);
+  const [searchScope,setSearchScope]           = useState("tasks");
   const [weeklyReviews,setWeeklyReviews]       = useState(loadWeekly);
   const [acctData,setAcctData]               = useState(loadAcct);
   const [missionTask,setMissionTask]           = useState(null);
@@ -1176,6 +1211,29 @@ export default function App() {
 
   // ── Session log ──
   useEffect(()=>{addLog("session_start","Session started",null,null,null);},[]);
+
+  // ── Brand colour immersion ──
+  useEffect(()=>{
+    if(activeBrand && view==="brand"){
+      const b=BRANDS.find(b=>b.id===activeBrand);
+      if(b) setBrandColor(b.color);
+    } else {
+      setBrandColor(null);
+    }
+  },[activeBrand,view]);
+
+  // ── Mood check-in: show once per day ──
+  useEffect(()=>{
+    const today=todayStr();
+    const todayEntry=loadMoods().find(m=>m.date===today);
+    if(!todayEntry){
+      const h=new Date().getHours();
+      if(h>=9&&h<20) setTimeout(()=>setShowMoodCheck(true), 3000);
+    } else {
+      setTodayMood(todayEntry.score);
+    }
+  // eslint-disable-next-line
+  },[]);
 
   // ── Streak save ──
   useEffect(()=>{ saveStreakLS(streak); },[streak]);
@@ -1597,6 +1655,62 @@ export default function App() {
     showToast("CSV exported");
   };
 
+  // ── Save mood ──
+  const saveMood = useCallback((score)=>{
+    const today=todayStr();
+    const updated=[...loadMoods().filter(m=>m.date!==today),{date:today,score,ts:nowISO()}];
+    setMoods(updated); saveMoods(updated);
+    setTodayMood(score); setShowMoodCheck(false);
+    const msgs={1:"Logged. Take it easy — do the easy wins today.",2:"Noted. Start small, build momentum.",3:"Good. A solid productive day ahead.",4:"Great energy. Tackle the hard stuff now.",5:"On fire! Attack the biggest challenges."};
+    showToast(msgs[score]||"Mood logged");
+  },[showToast]);
+
+  // ── Generate narrative ──
+  const generateNarrative = useCallback(async()=>{
+    setNarrativeLoading(true); setShowNarrative(true);
+    const bs=getBrandStatsRaw();
+    const weekAgo=new Date(Date.now()-7*86400000).toISOString().split("T")[0];
+    const allTasks=Object.values(data.tasks).flat();
+    const weekDone=allTasks.filter(t=>t.done&&t.doneAt>=weekAgo).length;
+    const weekMoods=moods.filter(m=>m.date>=weekAgo);
+    const avgMood=weekMoods.length?Math.round(weekMoods.reduce((s,m)=>s+m.score,0)/weekMoods.length*10)/10:null;
+    const context=`Week: ${weekDone} tasks completed. Brands: ${bs.map(b=>`${b.name} ${b.rate}% (${b.hg?.grade})`).join(", ")}. Overdue: ${bs.reduce((s,b)=>s+b.overdue,0)}. ${avgMood?`Avg mood: ${avgMood}/5.`:""}`;
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,
+          system:"Write a brief, human weekly narrative for a professional managing multiple betting/gaming brands. Write in second person, past tense. 3-4 sentences. Be specific, honest, insightful. Not corporate. Like a good manager telling you what your week looked like.",
+          messages:[{role:"user",content:"Write my week as a narrative. "+context}]})});
+      const json=await res.json();
+      setNarrativeText(json.content?.filter(c=>c.type==="text").map(c=>c.text).join("")||"");
+    }catch{setNarrativeText("Could not generate — try again.");}
+    setNarrativeLoading(false);
+  },[getBrandStatsRaw,data.tasks,moods,API_KEY]);
+
+  // ── Generate productivity profile ──
+  const generateProfile = useCallback(async()=>{
+    setProfileLoading(true); setShowProfile(true);
+    const allTasks=Object.values(data.tasks).flat();
+    const bs=getBrandStatsRaw();
+    const moodHist=moods.slice(-30);
+    const avgMood=moodHist.length?Math.round(moodHist.reduce((s,m)=>s+m.score,0)/moodHist.length*10)/10:null;
+    const journalEntries=Object.keys(data.journal||{}).length;
+    const decisions=(data.decisions||[]).length;
+    const totalDone=allTasks.filter(t=>t.done).length;
+    const overduePct=allTasks.length?Math.round(allTasks.filter(t=>!t.done&&t.due&&t.due<todayStr()).length/allTasks.length*100):0;
+    const context=`Total tasks completed: ${totalDone}. Overdue rate: ${overduePct}%. Brands: ${bs.map(b=>`${b.name} ${b.hg?.grade}`).join(", ")}. Journal entries: ${journalEntries}. Decisions logged: ${decisions}. Average mood: ${avgMood||"not tracked"}/5. Streak: ${streak.current||0} days (best: ${streak.best||0}).`;
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:700,
+          system:"You generate honest, insightful productivity profiles. Be direct, specific, and genuinely useful. Not generic. Write 4 sections: Your Strengths, Your Blind Spots, Your Patterns, One Recommendation. Use second person. Be a trusted advisor, not a cheerleader.",
+          messages:[{role:"user",content:"Generate my productivity profile based on: "+context}]})});
+      const json=await res.json();
+      setProfileText(json.content?.filter(c=>c.type==="text").map(c=>c.text).join("")||"");
+    }catch{setProfileText("Could not generate — try again.");}
+    setProfileLoading(false);
+  },[getBrandStatsRaw,data,moods,streak,API_KEY]);
+
   // ── Completion sound ──
   const playDone=useCallback(()=>{
     try{
@@ -1900,7 +2014,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
                   <div style={{fontSize:12.5,fontWeight:500,color:"#fff",marginBottom:5,lineHeight:1.35}}>{t.title}</div>
                   <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
                     <span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:t.brand?.color||"#9099B8"}}>{t.brand?.emoji} {t.brand?.name}</span>
-                    {t.due&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:color+"cc"}}>📅 {fmtDate(t.due)}</span>}
+                    {t.due&&(()=>{const db=dueBadge(t.due);return db?<span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,fontWeight:600,color:db.color,background:db.bg,padding:"1px 6px",borderRadius:99,marginLeft:4}}>{db.label}</span>:<span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:color+"cc"}}>📅 {fmtDate(t.due)}</span>;})()}
                     <span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"rgba(255,255,255,.25)"}}>{t.tab}</span>
                   </div>
                 </div>
@@ -1915,55 +2029,127 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
   const renderDashboard=()=>{
     const today=todayStr();
     const allTasks=Object.values(data.tasks).flat();
+    const overdueTasks=allTasks.filter(t=>!t.done&&t.due&&t.due<today);
+    const dueTodayTasks=allTasks.filter(t=>!t.done&&t.due===today);
+    const urgentTasks=allTasks.filter(t=>!t.done&&t.priority==="urgent");
+    const pendingTasks=allTasks.filter(t=>!t.done);
+    const hour=new Date().getHours();
+    const greeting=hour<12?"Good morning":hour<17?"Good afternoon":"Good evening";
     const chartData=Array.from({length:7},(_,i)=>{
       const d=new Date(); d.setDate(d.getDate()-(6-i));
       const ds=d.toISOString().split("T")[0];
       const dayTasks=allTasks.filter(t=>t.createdAt?.startsWith(ds));
       return {day:["S","M","T","W","T","F","S"][d.getDay()],added:dayTasks.length,done:dayTasks.filter(t=>t.done).length};
     });
+    const topMission=missionDone?null:(missionTask||urgentTasks[0]||dueTodayTasks[0]||pendingTasks.sort((a,b)=>({urgent:0,high:1,medium:2,low:3}[a.priority]||2)-({urgent:0,high:1,medium:2,low:3}[b.priority]||2))[0]);
+    const moodToday=moods.find(m=>m.date===today);
+    const weekAgo=new Date(Date.now()-7*86400000).toISOString().split("T")[0];
+    const weekMoods=moods.filter(m=>m.date>=weekAgo);
+    const avgMood=weekMoods.length?Math.round(weekMoods.reduce((s,m)=>s+m.score,0)/weekMoods.length*10)/10:null;
+
     return (
       <div className="anim-up">
-        {/* Proactive alerts strip */}
-        {activeAlerts.length>0&&(
-          <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
-            {activeAlerts.map((a,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"center",gap:7,padding:"7px 14px",background:`${a.color}12`,border:`1px solid ${a.color}30`,borderRadius:8,cursor:"pointer"}}
-                onClick={()=>a.type==="overdue"?setTaskFilter("overdue"):setView("calendar")}>
-                <span style={{fontSize:14}}>{a.icon}</span>
-                <span style={{fontSize:12.5,fontWeight:500,color:a.color}}>{a.msg}</span>
-                <button className="ai-btn" style={{fontSize:10,padding:"2px 8px",marginLeft:4}} disabled={insightLoading[`alert_${a.type}`]}
-                  onClick={e=>{e.stopPropagation();fetchInsight(`alert_${a.type}`,`I have an alert: ${a.msg}. What should I do about this right now? Give me 2 specific actions.`);}}>
-                  {insightLoading[`alert_${a.type}`]?"...":"◎ AI"}
-                </button>
-                {insights[`alert_${a.type}`]&&<span style={{fontSize:11.5,color:"var(--ink-3)",borderLeft:"1px solid var(--line)",paddingLeft:8,maxWidth:300}}>{insights[`alert_${a.type}`]}</span>}
+
+        {/* ── COMMAND HEADER ── */}
+        <div style={{marginBottom:20,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16}}>
+          <div>
+            <div style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:"var(--ink-4)",letterSpacing:2,textTransform:"uppercase",marginBottom:4}}>
+              {new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+            </div>
+            <div style={{fontSize:26,fontWeight:700,color:"var(--ink)",lineHeight:1.1,letterSpacing:-0.5}}>
+              {hour<12?"Good morning":"Good afternoon"} ☀️
+            </div>
+            <div style={{fontSize:13.5,color:"var(--ink-3)",marginTop:4}}>
+              {pendingTasks.length} tasks pending · {overdueTasks.length>0?<span style={{color:"#DC2626",fontWeight:600}}>{overdueTasks.length} overdue</span>:"all on track"} · Score <strong>{score}</strong>
+            </div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,cursor:"pointer"}} onClick={()=>setView("analytics")}>
+            <ScoreRing score={score}/>
+            <div style={{fontFamily:"Martian Mono,monospace",fontSize:7,color:"var(--ink-4)",letterSpacing:1.5,textTransform:"uppercase"}}>PRODASH SCORE</div>
+          </div>
+        </div>
+
+        {/* ── MISSION OF THE DAY ── */}
+        {topMission&&(
+          <div style={{marginBottom:16,padding:"16px 20px",background:"linear-gradient(135deg,#4F46E518,#7C3AED10)",border:"1px solid #4F46E530",borderRadius:14,display:"flex",alignItems:"center",gap:16}}>
+            <div style={{fontSize:28}}>🎯</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"#4F46E5",letterSpacing:2,textTransform:"uppercase",marginBottom:4}}>TODAY'S MISSION</div>
+              <div style={{fontSize:14.5,fontWeight:600,color:"var(--ink)",lineHeight:1.3,marginBottom:4}}>{topMission.title}</div>
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                {BRANDS.find(b=>b.id===topMission.brand?.split("_")[0])&&(
+                  <span style={{fontSize:11,color:"var(--ink-3)"}}>{BRANDS.find(b=>b.id===topMission.brand?.split("_")[0])?.emoji} {BRANDS.find(b=>b.id===topMission.brand?.split("_")[0])?.name}</span>
+                )}
+                {topMission.due&&(()=>{const db=dueBadge(topMission.due);return db?<span style={{fontFamily:"Martian Mono,monospace",fontSize:9,fontWeight:600,color:db.color,background:db.bg,padding:"2px 8px",borderRadius:99}}>{db.label}</span>:null;})()}
+                <span style={{fontFamily:"Martian Mono,monospace",fontSize:9,padding:"2px 8px",background:"var(--surface)",borderRadius:99,color:"var(--ink-4)",textTransform:"uppercase"}}>{topMission.priority}</span>
               </div>
-            ))}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <button className="btn btn-primary" style={{fontSize:12,padding:"8px 18px",borderRadius:10}}
+                onClick={()=>{const id=topMission.id;Object.entries(data.tasks).forEach(([k,arr])=>{const idx=arr.findIndex(t=>t.id===id);if(idx>=0){const upd={...data.tasks};upd[k]=[...arr];upd[k][idx]={...upd[k][idx],done:true,doneAt:nowISO()};setData(d=>({...d,tasks:upd}));playDone();}});setMissionDone(true);showToast("🎯 Mission complete!");}}>
+                ✓ Done
+              </button>
+              <button className="btn btn-ghost" style={{fontSize:11,padding:"5px 10px"}}
+                onClick={()=>{setActiveBrand(topMission.brand?.split("_")[0]||null);setView(topMission.brand?"brand":"warroom");}}>
+                View →
+              </button>
+            </div>
           </div>
         )}
 
-        {/* AI Briefing */}
-        <div className="briefing-card">
+        {/* ── ALERT STRIP ── */}
+        {(overdueTasks.length>0||dueTodayTasks.length>0||activeAlerts.length>0)&&(
+          <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+            {overdueTasks.length>0&&(
+              <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",background:"#FEF2F2",border:"1px solid #FCA5A5",borderRadius:10,cursor:"pointer",flex:1,minWidth:180}}
+                onClick={()=>setTaskFilter("overdue")}>
+                <span style={{fontSize:16}}>🔥</span>
+                <div>
+                  <div style={{fontSize:12.5,fontWeight:600,color:"#DC2626"}}>{overdueTasks.length} overdue task{overdueTasks.length>1?"s":""}</div>
+                  <div style={{fontSize:11,color:"#EF4444"}}>{overdueTasks.slice(0,2).map(t=>t.title).join(", ")}{overdueTasks.length>2?` +${overdueTasks.length-2} more`:""}</div>
+                </div>
+              </div>
+            )}
+            {dueTodayTasks.length>0&&(
+              <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",background:"#FFFBEB",border:"1px solid #FCD34D",borderRadius:10,flex:1,minWidth:180}}>
+                <span style={{fontSize:16}}>⏰</span>
+                <div>
+                  <div style={{fontSize:12.5,fontWeight:600,color:"#D97706"}}>{dueTodayTasks.length} due today</div>
+                  <div style={{fontSize:11,color:"#F59E0B"}}>{dueTodayTasks.slice(0,2).map(t=>t.title).join(", ")}{dueTodayTasks.length>2?` +${dueTodayTasks.length-2} more`:""}</div>
+                </div>
+              </div>
+            )}
+            {todayReminders.length>0&&(
+              <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",background:"#F5F3FF",border:"1px solid #C4B5FD",borderRadius:10,flex:1,minWidth:180}}>
+                <span style={{fontSize:16}}>🔔</span>
+                <div>
+                  <div style={{fontSize:12.5,fontWeight:600,color:"#7C3AED"}}>{todayReminders.length} reminder{todayReminders.length>1?"s":""} today</div>
+                  <div style={{fontSize:11,color:"#8B5CF6"}}>{todayReminders.map(r=>r.title).join(", ")}</div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── AI BRIEFING ── */}
+        <div className="briefing-card" style={{marginBottom:16}}>
           <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16}}>
             <div style={{flex:1}}>
               <div className="briefing-title">◎ AI DAILY BRIEFING</div>
               {insightLoading["briefing"]
-                ?<div style={{color:"var(--ink-3)",fontSize:12.5,display:"flex",alignItems:"center",gap:8}}><span className="typing-dots"><span/><span/><span/></span> Analysing your data...</div>
+                ?<div style={{color:"var(--ink-3)",fontSize:12.5,display:"flex",alignItems:"center",gap:8}}><span className="typing-dots"><span/><span/><span/></span> Analysing your situation...</div>
                 :insights["briefing"]
                   ?<div className="briefing-text">{insights["briefing"]}</div>
-                  :<div style={{color:"var(--ink-4)",fontSize:12.5}}>Generating your briefing...</div>
+                  :<div style={{color:"var(--ink-4)",fontSize:12.5,fontStyle:"italic"}}>Click Briefing to get your AI-powered daily summary</div>
               }
-            </div>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,flexShrink:0}}>
-              <ScoreRing score={score}/>
-              <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"var(--ink-4)",letterSpacing:1,textTransform:"uppercase"}}>SCORE</div>
             </div>
           </div>
           <div style={{marginTop:12,display:"flex",gap:8,flexWrap:"wrap"}}>
             {[
-              {k:"briefing",label:insights["briefing"]?"↻ Refresh":"▶ Briefing",prompt:"Sharp executive morning briefing. Top risks, today's priority, one strategic insight. 3 sentences."},
-              {k:"plan",label:"📋 Action Plan",prompt:"List top 5 actions for today by urgency and brand performance. Specific brand/task names."},
-              {k:"risks",label:"⚠ Risk Analysis",prompt:"Top 3 risks right now. Brand, issue, immediate action. Be specific."},
-              {k:"forecast",label:"📈 Week Forecast",prompt:"Based on current trajectory, forecast how this week will end. Will I hit my targets? What's at risk?"},
+              {k:"briefing",label:insights["briefing"]?"↻ Refresh":"▶ Briefing",prompt:`Sharp executive morning briefing for someone managing 6 betting/gaming brands. They have ${pendingTasks.length} pending tasks, ${overdueTasks.length} overdue, score is ${score}/100. Top risks, today's priority, one strategic insight. 3 sentences max.`},
+              {k:"plan",label:"📋 Action Plan",prompt:`Create a ranked action plan for today. ${overdueTasks.length} overdue tasks, ${dueTodayTasks.length} due today, ${urgentTasks.length} urgent. List top 5 by urgency and brand impact. Specific task/brand names.`},
+              {k:"risks",label:"⚠ Risks",prompt:`Top 3 risks right now based on: ${overdueTasks.length} overdue, score ${score}. Each risk: brand, problem, immediate fix. Be blunt.`},
+              {k:"forecast",label:"📈 Forecast",prompt:`Forecast how this week ends based on current data: ${stats.weekDone} done this week, ${pendingTasks.length} pending, ${overdueTasks.length} overdue. Will targets be hit? 2 sentences.`},
             ].map(b=>(
               <button key={b.k} className="ai-btn" disabled={insightLoading[b.k]} onClick={()=>fetchInsight(b.k,b.prompt)}>
                 {insightLoading[b.k]?"...":b.label}
@@ -1982,56 +2168,32 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
           )}
         </div>
 
-        {/* Today reminder banner */}
-        {todayReminders.length>0&&(
-          <div className="today-banner mb16">
-            <span style={{fontSize:16}}>🔔</span>
-            <div><div style={{fontWeight:600,fontSize:13,color:"#92400E"}}>Today's Reminders ({todayReminders.length})</div>
-              <div style={{fontSize:12,color:"#B45309"}}>{todayReminders.map(r=>`${r.time?r.time+" · ":""}${r.title}`).join(" · ")}</div>
-            </div>
-          </div>
-        )}
-
-        {/* KPIs */}
+        {/* ── KPI GRID ── */}
         <div className="g4 mb14">
           {[
-            {label:"TOTAL TASKS",val:stats.total,sub:"All time",color:"#2563EB",cls:"blue"},
-            {label:"COMPLETED",  val:stats.done, sub:`${stats.rate}% rate`,color:"#059669",cls:"green"},
-            {label:"TODAY",      val:`${stats.todayDone}/${stats.todayTotal}`,sub:"Tasks done",color:"#D97706",cls:"amber"},
-            {label:"OVERDUE",    val:stats.overdue,sub:stats.overdue>0?"Needs attention":"All clear",color:stats.overdue>0?"#DC2626":"#059669",cls:stats.overdue>0?"red":"green"},
+            {label:"SCORE",val:score,sub:scoreHistory.length>1?`${score>scoreHistory[scoreHistory.length-2]?.score?"↑":"↓"} vs yesterday`:"Today's score",color:"#4F46E5",cls:"purple"},
+            {label:"TODAY",val:`${stats.todayDone}/${stats.todayTotal}`,sub:"Tasks done today",color:"#059669",cls:"green"},
+            {label:"OVERDUE",val:stats.overdue,sub:stats.overdue>0?"Act now":"All clear ✓",color:stats.overdue>0?"#DC2626":"#059669",cls:stats.overdue>0?"red":"green"},
+            {label:"STREAK",val:`${streak.current||0}🔥`,sub:`Best: ${streak.best||0} days`,color:"#F59E0B",cls:"amber"},
           ].map(k=>(
             <div key={k.label} className={`kpi-card ${k.cls}`}>
               <span className="kpi-label-top">{k.label}</span>
-              <span className="kpi-val" style={{color:k.color,fontSize:36}}>{k.val}</span>
+              <span className="kpi-val" style={{color:k.color,fontSize:32}}>{k.val}</span>
               <div className="kpi-sub">{k.sub}</div>
             </div>
           ))}
         </div>
 
-        {/* Time tracked KPI */}
-        <div className="g4 mb14">
-          {[
-            {label:"TIME TRACKED",val:fmtDur(stats.totalTimeSpent),sub:"Logged across all tasks",color:"#7C3AED"},
-            {label:"EST. PIPELINE",val:stats.totalEstMins?fmtDur(stats.totalEstMins*60000):"—",sub:"Estimated remaining",color:"#0891B2"},
-            {label:"NOTES",       val:data.notes.length,sub:"On pin board",color:"#D97706"},
-            {label:"REMINDERS",   val:data.reminders.filter(r=>r.date>=todayStr()).length,sub:"Upcoming",color:"#7C3AED"},
-          ].map(k=>(
-            <div key={k.label} className="kpi-card" style={{borderTop:"none",borderLeft:`3px solid ${k.color}`,paddingLeft:16}}>
-              <span className="kpi-label-top">{k.label}</span>
-              <span style={{fontFamily:"Martian Mono,monospace",fontSize:26,fontWeight:600,color:k.color,lineHeight:1,letterSpacing:-1,display:"block",marginBottom:4}}>{k.val}</span>
-              <div className="kpi-sub">{k.sub}</div>
-            </div>
-          ))}
-        </div>
+        {/* ── BRAND PULSE + MOOD ── */}
+        <div className="g2 mb14" style={{gridTemplateColumns:"2fr 1fr"}}>
 
-        {/* Brand table + right col */}
-        <div className="g2 mb14">
+          {/* Brand table */}
           <div className="card" style={{padding:0,overflow:"hidden"}}>
             <div style={{padding:"12px 16px",borderBottom:"1px solid var(--line)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span className="card-title">BRAND PERFORMANCE</span>
+              <span className="card-title">BRAND PULSE</span>
               <button className="ai-btn" style={{fontSize:10,padding:"3px 10px"}} disabled={insightLoading["brand_summary"]}
-                onClick={()=>fetchInsight("brand_summary","In 2 sentences: which brands need intervention and the single most important action to take today.")}>
-                {insightLoading["brand_summary"]?"...":"◎ AI Summary"}
+                onClick={()=>fetchInsight("brand_summary","In 2 sentences: which brands need intervention now and the single most important action.")}>
+                {insightLoading["brand_summary"]?"...":"◎ AI Read"}
               </button>
             </div>
             {insights["brand_summary"]&&(
@@ -2040,95 +2202,153 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
                 <div style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.65}}>{insights["brand_summary"]}</div>
               </div>
             )}
-            {bStats.map((b,i)=>(
-              <div key={b.id} onClick={()=>{setActiveBrand(b.id);setView("brand");}}
-                style={{display:"grid",gridTemplateColumns:"1.8fr .5fr .5fr .8fr 1fr",padding:"9px 16px",borderBottom:i<5?"1px solid var(--surface)":"none",alignItems:"center",cursor:"pointer",transition:"background .12s"}}
-                onMouseEnter={e=>e.currentTarget.style.background="var(--surface)"} onMouseLeave={e=>e.currentTarget.style.background=""}>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontSize:13}}>{b.emoji}</span>
-                  <span style={{fontSize:12.5,fontWeight:500,color:b.color}}>{b.name}</span>
-                  {b.overdue>0&&<span className="badge badge-red">{b.overdue}▲</span>}
-                  {b.hg&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:10,fontWeight:700,color:b.hg.color}}>{b.hg.grade}</span>}
-                  {(()=>{const t=brandTemp(b,Object.entries(data.tasks).filter(([k])=>k.startsWith(b.id)).flatMap(([,v])=>v));return<span style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:t.color}}>{t.label}</span>})()}
-                </div>
-                <span style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:"var(--ink-4)"}}>{b.tasks}</span>
-                <span style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:b.color,fontWeight:500}}>{b.done}</span>
-                <span style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:"var(--ink-4)"}}>{b.timeSpent>0?fmtDur(b.timeSpent):"—"}</span>
-                <div style={{display:"flex",alignItems:"center",gap:7}}>
-                  <div style={{flex:1,height:5,background:"var(--surface)",borderRadius:99,overflow:"hidden"}}>
-                    <div style={{height:"100%",width:`${b.rate}%`,background:b.color,borderRadius:99,transition:"width 1s"}}/>
+            {bStats.map((b,i)=>{
+              const temp=brandTemp(b,Object.entries(data.tasks).filter(([k])=>k.startsWith(b.id)).flatMap(([,v])=>v));
+              return (
+                <div key={b.id} onClick={()=>{setActiveBrand(b.id);setView("brand");}}
+                  style={{display:"grid",gridTemplateColumns:"2fr .5fr .5fr 1fr",padding:"10px 16px",borderBottom:i<5?"1px solid var(--surface)":"none",alignItems:"center",cursor:"pointer",transition:"all .12s",borderLeft:`3px solid ${b.color}30`}}
+                  onMouseEnter={e=>{e.currentTarget.style.background="var(--surface)";e.currentTarget.style.borderLeftColor=b.color;}}
+                  onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.borderLeftColor=b.color+"30";}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:15}}>{b.emoji}</span>
+                    <div>
+                      <div style={{fontSize:12.5,fontWeight:600,color:b.color,lineHeight:1}}>{b.name}</div>
+                      <div style={{fontSize:9.5,color:"var(--ink-4)",marginTop:1}}>{b.done}/{b.tasks} done · {temp.label}</div>
+                    </div>
+                    {b.overdue>0&&<span className="badge badge-red" style={{marginLeft:4}}>{b.overdue}▲</span>}
                   </div>
-                  <span style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:b.color,width:30,textAlign:"right"}}>{b.rate}%</span>
+                  <span style={{fontFamily:"Martian Mono,monospace",fontSize:10.5,fontWeight:700,color:b.hg?.color||"var(--ink-4)"}}>{b.hg?.grade||"—"}</span>
+                  <span style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:temp.color}}>{temp.temp}°</span>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <div style={{flex:1,height:5,background:"var(--surface)",borderRadius:99,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${b.rate}%`,background:b.color,borderRadius:99,transition:"width 1.2s ease"}}/>
+                    </div>
+                    <span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:b.color,width:28,textAlign:"right",fontWeight:600}}>{b.rate}%</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            <div className="card">
-              <div className="card-header"><span className="card-title">PROGRESS TRACKER</span></div>
-              {[{label:"Today",pct:stats.todayTotal?Math.round(stats.todayDone/stats.todayTotal*100):0,val:`${stats.todayDone}/${stats.todayTotal}`,c:"#059669"},{label:"This Week",pct:stats.weekTotal?Math.round(stats.weekDone/stats.weekTotal*100):0,val:`${stats.weekDone}/${stats.weekTotal}`,c:"#2563EB"},{label:"All Time",pct:stats.rate,val:`${stats.done}/${stats.total}`,c:"#D97706"}].map(p=>(
-                <div key={p.label} className="mb12">
-                  <div className="row-sb mb6"><span style={{fontSize:12.5,fontWeight:500,color:"var(--ink-3)"}}>{p.label}</span><span style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:p.c,fontWeight:500}}>{p.val}</span></div>
-                  <div className="prog-track"><div className="prog-fill" style={{width:`${p.pct}%`,background:p.c}}/></div>
+          {/* Right column: mood + quick stats */}
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+
+            {/* Emotional check-in */}
+            <div className="card" style={{padding:"14px 16px"}}>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"var(--ink-4)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:10}}>HOW ARE YOU?</div>
+              {moodToday?(
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:32}}>{["😞","😕","😐","🙂","😊"][moodToday.score-1]}</div>
+                  <div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>Logged today</div>
+                  {avgMood&&<div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--ink-4)",marginTop:4}}>7-day avg: {avgMood}/5</div>}
+                </div>
+              ):(
+                <>
+                  <div style={{fontSize:11.5,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>Rate your energy today</div>
+                  <div style={{display:"flex",justifyContent:"space-between"}}>
+                    {[1,2,3,4,5].map(s=>(
+                      <button key={s} onClick={()=>{const updated=[...loadMoods().filter(m=>m.date!==today),{date:today,score:s,ts:nowISO()}];setMoods(updated);localStorage.setItem(MOOD_KEY,JSON.stringify(updated));showToast("Mood logged");}}
+                        style={{fontSize:22,background:"none",border:"none",cursor:"pointer",padding:4,borderRadius:8,transition:"transform .15s"}}
+                        onMouseEnter={e=>e.currentTarget.style.transform="scale(1.3)"}
+                        onMouseLeave={e=>e.currentTarget.style.transform=""}>
+                        {["😞","😕","😐","🙂","😊"][s-1]}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Quick stats */}
+            <div className="card" style={{padding:"14px 16px",flex:1}}>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"var(--ink-4)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:12}}>QUICK STATS</div>
+              {[
+                {label:"This week",val:`${stats.weekDone} done`,color:"#2563EB"},
+                {label:"Time logged",val:fmtDur(stats.totalTimeSpent),color:"#7C3AED"},
+                {label:"Notes",val:data.notes.length,color:"#D97706"},
+                {label:"Goals",val:`${(data.goals||[]).filter(g=>!g.achieved).length} active`,color:"#059669"},
+                {label:"Task debt",val:allTasks.filter(t=>!t.done&&taskAgeDays(t.createdAt)>14).length>0?`${allTasks.filter(t=>!t.done&&taskAgeDays(t.createdAt)>14).length} old`:"Clear",color:allTasks.filter(t=>!t.done&&taskAgeDays(t.createdAt)>14).length>0?"#DC2626":"#059669"},
+              ].map(s=>(
+                <div key={s.label} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid var(--surface)"}}>
+                  <span style={{fontSize:12,color:"var(--ink-3)"}}>{s.label}</span>
+                  <span style={{fontFamily:"Martian Mono,monospace",fontSize:11,fontWeight:600,color:s.color}}>{s.val}</span>
                 </div>
               ))}
-              <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid var(--surface)",display:"flex",justifyContent:"space-around"}}>
-                {[[stats.overdue,"Overdue","#DC2626"],[data.reminders.filter(r=>r.date>=todayStr()).length,"Upcoming","#7C3AED"],[Object.keys(activeTimers).length,"Timers","#D97706"]].map(([v,l,c])=>(
-                  <div key={l} style={{textAlign:"center"}}>
-                    <div style={{fontFamily:"Martian Mono,monospace",fontSize:22,fontWeight:600,color:c,lineHeight:1,letterSpacing:-1}}>{v}</div>
-                    <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"var(--ink-4)",letterSpacing:1,marginTop:3,textTransform:"uppercase"}}>{l}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="card" style={{flex:1}}>
-              <div className="card-header"><span className="card-title">RECENT ACTIVITY</span><button className="btn btn-ghost btn-xs" onClick={()=>setView("timelog")}>All →</button></div>
-              {(data.timelog||[]).filter(l=>l.type!=="session_start").slice(0,5).map(l=>{
-                const lt=LOG_TYPES[l.type]||{color:"#9099B8"};
-                return (
-                  <div key={l.id} style={{display:"flex",gap:9,padding:"7px 0",borderBottom:"1px solid var(--surface)",alignItems:"flex-start"}}>
-                    <div style={{width:7,height:7,borderRadius:"50%",background:lt.color,flexShrink:0,marginTop:5}}/>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:12,color:"var(--ink)",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.title}</div>
-                      <div style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-4)",marginTop:2}}>{fmtDateTime(l.ts)}</div>
-                    </div>
-                  </div>
-                );
-              })}
-              {!(data.timelog||[]).filter(l=>l.type!=="session_start").length&&<div style={{fontSize:12,color:"var(--ink-4)",textAlign:"center",padding:"16px 0"}}>No activity yet</div>}
+              <button className="btn btn-ghost btn-xs w-full" style={{marginTop:10,fontSize:10}} onClick={()=>setView("analytics")}>Full Analytics →</button>
             </div>
           </div>
         </div>
 
-        {/* Chart */}
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">7-DAY ACTIVITY</span>
-            <div style={{display:"flex",gap:14,alignItems:"center"}}>
-              {[["#2563EB","Added"],["#059669","Done"]].map(([c,l])=><div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:8,height:8,borderRadius:2,background:c}}/><span style={{fontSize:10.5,color:"var(--ink-4)"}}>{l}</span></div>)}
-              <button className="ai-btn" style={{fontSize:10,padding:"3px 10px"}} disabled={insightLoading["weekly"]} onClick={()=>fetchInsight("weekly","Analyse my 7-day activity pattern. What does it reveal about my habits? Any concerns? 2 sentences.")}>◎ Analyse</button>
+        {/* ── ACTIVITY CHART + NARRATIVE ── */}
+        <div className="g2 mb14">
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">7-DAY ACTIVITY</span>
+              <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                {[["#2563EB","Added"],["#059669","Done"]].map(([c,l])=><div key={l} style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:7,height:7,borderRadius:2,background:c}}/><span style={{fontSize:10,color:"var(--ink-4)"}}>{l}</span></div>)}
+                <button className="ai-btn" style={{fontSize:10,padding:"3px 8px"}} disabled={insightLoading["weekly"]} onClick={()=>fetchInsight("weekly","Analyse my 7-day task activity pattern. What does it reveal about my work habits? Any red flags? 2 sentences.")}>◎</button>
+              </div>
             </div>
+            {insights["weekly"]&&<div className="ai-panel" style={{marginBottom:10}}><div className="ai-panel-text">{insights["weekly"]}</div></div>}
+            <ResponsiveContainer width="100%" height={120}>
+              <BarChart data={chartData} barGap={2}>
+                <CartesianGrid vertical={false} stroke="var(--surface)"/>
+                <XAxis dataKey="day" tick={{fontFamily:"Martian Mono,monospace",fontSize:9,fill:"var(--ink-4)"}} axisLine={false} tickLine={false}/>
+                <YAxis tick={{fontFamily:"Martian Mono,monospace",fontSize:9,fill:"var(--ink-4)"}} axisLine={false} tickLine={false} allowDecimals={false}/>
+                <Tooltip content={<CT/>}/>
+                <Bar dataKey="added" name="Added" fill="#2563EB" radius={[3,3,0,0]}/>
+                <Bar dataKey="done"  name="Done"  fill="#059669" radius={[3,3,0,0]}/>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-          {insights["weekly"]&&<div className="ai-panel" style={{marginBottom:14}}><div className="ai-panel-title">◎ WEEKLY PATTERN ANALYSIS</div><div className="ai-panel-text">{insights["weekly"]}</div></div>}
-          <ResponsiveContainer width="100%" height={130}>
-            <BarChart data={chartData} barGap={2}>
-              <CartesianGrid vertical={false} stroke="var(--surface)"/>
-              <XAxis dataKey="day" tick={{fontFamily:"Martian Mono,monospace",fontSize:9,fill:"var(--ink-4)"}} axisLine={false} tickLine={false}/>
-              <YAxis tick={{fontFamily:"Martian Mono,monospace",fontSize:9,fill:"var(--ink-4)"}} axisLine={false} tickLine={false} allowDecimals={false}/>
-              <Tooltip content={<CT/>}/>
-              <Bar dataKey="added" name="Added" fill="#2563EB" radius={[3,3,0,0]}/>
-              <Bar dataKey="done"  name="Done"  fill="#059669" radius={[3,3,0,0]}/>
-            </BarChart>
-          </ResponsiveContainer>
+
+          {/* Recent activity */}
+          <div className="card">
+            <div className="card-header"><span className="card-title">RECENT ACTIVITY</span><button className="btn btn-ghost btn-xs" onClick={()=>setView("timelog")}>All →</button></div>
+            {(data.timelog||[]).filter(l=>l.type!=="session_start").slice(0,6).map(l=>{
+              const lt=LOG_TYPES[l.type]||{color:"#9099B8"};
+              return (
+                <div key={l.id} style={{display:"flex",gap:9,padding:"7px 0",borderBottom:"1px solid var(--surface)",alignItems:"flex-start"}}>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:lt.color,flexShrink:0,marginTop:5}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,color:"var(--ink)",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.title}</div>
+                    <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"var(--ink-4)",marginTop:1}}>{fmtDateTime(l.ts)}</div>
+                  </div>
+                </div>
+              );
+            })}
+            {!(data.timelog||[]).filter(l=>l.type!=="session_start").length&&<div style={{fontSize:12,color:"var(--ink-4)",textAlign:"center",padding:"20px 0"}}>No activity logged yet</div>}
+          </div>
         </div>
+
+        {/* ── SCORE HISTORY ── */}
+        {scoreHistory.length>2&&(
+          <div className="card mb14">
+            <div className="card-header">
+              <span className="card-title">SCORE HISTORY</span>
+              <button className="ai-btn" style={{fontSize:10,padding:"3px 8px"}} disabled={insightLoading["score_trend"]}
+                onClick={()=>fetchInsight("score_trend",`My PRODASH scores over ${scoreHistory.length} days: ${scoreHistory.slice(-14).map(h=>h.score).join(",")}. Analyse the trend, identify what's driving changes, and give me one actionable insight.`)}>
+                {insightLoading["score_trend"]?"...":"◎ Trend"}
+              </button>
+            </div>
+            {insights["score_trend"]&&<div className="ai-panel" style={{marginBottom:10}}><div className="ai-panel-text">{insights["score_trend"]}</div></div>}
+            <ResponsiveContainer width="100%" height={80}>
+              <LineChart data={scoreHistory.slice(-30)}>
+                <CartesianGrid vertical={false} stroke="var(--surface)"/>
+                <XAxis dataKey="date" tick={false} axisLine={false} tickLine={false}/>
+                <YAxis domain={[0,100]} tick={{fontFamily:"Martian Mono,monospace",fontSize:8,fill:"var(--ink-4)"}} axisLine={false} tickLine={false}/>
+                <Tooltip content={<CT/>}/>
+                <Line type="monotone" dataKey="score" stroke="#4F46E5" strokeWidth={2} dot={false}/>
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
       </div>
     );
   };
 
-  // ══════════════════════════════════════════════════════════
-  //  BRAND
-  // ══════════════════════════════════════════════════════════
+
   const renderBrand=()=>{
     if(!currentBrand) return null;
     const key=`${activeBrand}_${brandTab}`;
@@ -2166,7 +2386,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
               {t.recurrence&&<span className="badge badge-blue">🔁 {t.recurrence}</span>}
               {isOverdue&&<span className="badge badge-red">⚠ OVERDUE</span>}
               {ageLabel&&!t.done&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:ageColor,fontWeight:600}}>{ageLabel}</span>}
-              {t.due&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:isOverdue?"#DC2626":"var(--ink-4)"}}>Due {fmtDate(t.due)}</span>}
+              {t.due&&(()=>{const db=dueBadge(t.due);return db?<span style={{fontFamily:"Martian Mono,monospace",fontSize:9,fontWeight:600,color:db.color,background:db.bg,padding:"2px 7px",borderRadius:99}}>{db.label}</span>:<span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:"var(--ink-4)"}}>Due {fmtDate(t.due)}</span>;})()}
               {t.estimatedMins&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:"var(--ink-4)"}}>~{t.estimatedMins}m</span>}
               {t.timeSpent>0&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:"#059669"}}>⏱ {fmtDur(t.timeSpent)}</span>}
               {timerRunning&&<span className="timer-badge">⏱ Running</span>}
@@ -2299,7 +2519,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
                       <div style={{fontSize:12.5,fontWeight:500,color:"var(--ink)",marginBottom:6,lineHeight:1.4}}>{t.title}</div>
                       <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
                         {t.priority&&<span className={`badge ${t.priority==="low"?"badge-green":t.priority==="medium"?"badge-amber":t.priority==="high"?"badge-red":"badge-violet"}`}>{t.priority}</span>}
-                        {t.due&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:t.due<today&&!t.done?"#DC2626":"var(--ink-4)"}}>📅 {fmtDate(t.due)}</span>}
+                        {t.due&&(()=>{const db=dueBadge(t.due);return db&&!t.done?<span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,fontWeight:600,color:db.color,background:db.bg,padding:"1px 6px",borderRadius:99}}>{db.label}</span>:<span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-4)"}}>📅 {fmtDate(t.due)}</span>;})()}
                         {t.timeSpent>0&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"#7C3AED"}}>⏱ {fmtDur(t.timeSpent)}</span>}
                       </div>
                       <div style={{display:"flex",gap:4}}>
@@ -2807,6 +3027,62 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
   return (
     <div className="app">
       {showConfetti&&<Confetti/>}
+      {/* Mood check-in */}
+      {showMoodCheck&&!todayMood&&(
+        <div style={{position:"fixed",bottom:80,right:24,background:"var(--white)",border:"1px solid var(--line)",borderRadius:16,padding:"20px 24px",zIndex:200,boxShadow:"var(--s3)",width:280}}>
+          <button onClick={()=>setShowMoodCheck(false)} style={{position:"absolute",top:10,right:12,background:"none",border:"none",color:"var(--ink-4)",cursor:"pointer",fontSize:14}}>✕</button>
+          <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--ink-4)",letterSpacing:2,marginBottom:10,textTransform:"uppercase"}}>DAILY CHECK-IN</div>
+          <div style={{fontSize:14,fontWeight:600,color:"var(--ink)",marginBottom:14}}>How are you actually doing?</div>
+          <div style={{display:"flex",gap:8,justifyContent:"space-between"}}>
+            {[[1,"😓"],[2,"😐"],[3,"🙂"],[4,"😊"],[5,"🔥"]].map(([score,emoji])=>(
+              <button key={score} onClick={()=>saveMood(score)} style={{flex:1,padding:"10px 0",fontSize:20,border:"1px solid var(--line)",borderRadius:10,background:"var(--surface)",cursor:"pointer",transition:"all .15s"}}
+                onMouseEnter={e=>{e.currentTarget.style.background="var(--indigo)";e.currentTarget.style.borderColor="var(--indigo)";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="var(--surface)";e.currentTarget.style.borderColor="var(--line)";}}>
+                {emoji}
+              </button>
+            ))}
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontFamily:"Martian Mono,monospace",fontSize:8,color:"var(--ink-4)"}}>
+            <span>tough</span><span>amazing</span>
+          </div>
+        </div>
+      )}
+      {/* Narrative modal */}
+      {showNarrative&&(
+        <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&setShowNarrative(false)}>
+          <div className="modal-box" style={{maxWidth:500}}>
+            <div className="modal-title"><span>📖 YOUR WEEK AS A STORY</span><button className="modal-close" onClick={()=>setShowNarrative(false)}>✕</button></div>
+            {narrativeLoading&&<div style={{display:"flex",gap:10,alignItems:"center",padding:"20px 0",color:"var(--ink-3)",fontSize:13}}><span className="typing-dots"><span/><span/><span/></span> Writing your narrative...</div>}
+            {narrativeText&&!narrativeLoading&&(
+              <div>
+                <div style={{fontSize:16,lineHeight:1.9,color:"var(--ink-2)",fontStyle:"italic",borderLeft:"3px solid var(--indigo)",paddingLeft:16}}>{narrativeText}</div>
+                <div style={{marginTop:20,display:"flex",gap:8}}>
+                  <button className="btn btn-primary btn-sm" onClick={generateNarrative}>↻ Regenerate</button>
+                  <button className="btn btn-ghost btn-sm" onClick={()=>{saveJournalEntry(todayStr(),{narrative:narrativeText});showToast("Saved to journal");}}>💾 Save to Journal</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Productivity Profile modal */}
+      {showProfile&&(
+        <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&setShowProfile(false)}>
+          <div className="modal-box" style={{maxWidth:560}}>
+            <div className="modal-title"><span>🧬 YOUR PRODUCTIVITY PROFILE</span><button className="modal-close" onClick={()=>setShowProfile(false)}>✕</button></div>
+            {profileLoading&&<div style={{display:"flex",gap:10,alignItems:"center",padding:"20px 0",color:"var(--ink-3)",fontSize:13}}><span className="typing-dots"><span/><span/><span/></span> Analysing your patterns...</div>}
+            {profileText&&!profileLoading&&(
+              <div>
+                <div style={{fontSize:13.5,lineHeight:1.9,color:"var(--ink-2)",whiteSpace:"pre-line"}}>{profileText}</div>
+                <div style={{marginTop:20,display:"flex",gap:8}}>
+                  <button className="btn btn-primary btn-sm" onClick={generateProfile}>↻ Regenerate</button>
+                  <button className="btn btn-ghost btn-sm" onClick={()=>setShowProfile(false)}>Close</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {/* Morning prompt */}
       {showMorningPrompt&&missedTasks.length>0&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
@@ -2928,7 +3204,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
         onDone={(markDone)=>endFocus(markDone)}
         onExit={()=>endFocus(false)}/>}
       <div className={`mob-overlay${sidebarOpen?" open":""}`} onClick={()=>setSidebarOpen(false)}/>
-      <nav className={`sidebar${sidebarOpen?" open":""}`}>
+      <nav className={`sidebar${sidebarOpen?" open":""}`} style={brandColor?{background:`linear-gradient(180deg, ${brandColor}0a 0%, var(--sidebar-bg) 60%)`}:{}}>
         <div className="logo-area">
           <div className="logo">
             <div className="logo-icon">⚡</div>
@@ -2951,6 +3227,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
             const bs=bStats.find(x=>x.id===b.id);
             return (
               <div key={b.id} className={`nav-item${view==="brand"&&activeBrand===b.id?" active":""}`}
+                style={view==="brand"&&activeBrand===b.id?{background:b.color+"18",borderLeft:`3px solid ${b.color}`,color:b.color}:{}}
                 onClick={()=>{setActiveBrand(b.id);setView("brand");setBrandTab("Reporting");setTaskFilter("all");setSearchQ("");setSidebarOpen(false);}}>
                 <div className="brand-marker" style={{background:b.color}}/>
                 {b.emoji} {b.name}
@@ -2987,7 +3264,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
       </nav>
 
       <div className="main">
-        <div className="topbar">
+        <div className="topbar" style={brandColor?{borderBottom:`2px solid ${brandColor}30`,background:`linear-gradient(135deg, ${brandColor}08 0%, var(--white) 60%)`,boxShadow:`0 1px 0 ${brandColor}15`}:{}}>
           <div className="row gap10">
             <button className="hamburger" onClick={()=>setSidebarOpen(p=>!p)}><span/><span/><span/></button>
             <span className="page-title">{pageTitle}</span>
@@ -3016,6 +3293,8 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
               <span style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:dbStatus==="ok"?"#059669":dbStatus==="loading"?"#2563EB":"#DC2626",fontWeight:600,letterSpacing:.5}}>{dbStatus==="ok"?"CLOUD":dbStatus==="loading"?"SYNC...":"LOCAL"}</span>
             </div>
             {stats.overdue>0&&<button onClick={()=>setView("warroom")} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",background:"rgba(220,38,38,.1)",border:"1px solid rgba(220,38,38,.3)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"#DC2626",cursor:"pointer",fontWeight:600}}>⚔ WAR ROOM <span style={{background:"#DC2626",color:"#fff",borderRadius:99,padding:"0 5px",fontSize:7.5,marginLeft:2}}>{stats.overdue}</span></button>}
+            <button onClick={()=>{generateNarrative();}} title="Your week as a story" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>📖 Story</button>
+            <button onClick={()=>{generateProfile();}} title="Productivity Profile" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>🧬 Profile</button>
             <button onClick={()=>setRadioMode(true)} title="PRODASH Radio — ambient focus mode" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>📻 Radio</button>
             <button onClick={()=>setShowWhatIf(true)} title="What-If Simulator" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>🔮 What-If</button>
             <button onClick={startVoice} title="Voice capture" style={{padding:"4px 10px",background:voiceActive?"rgba(220,38,38,.15)":"transparent",border:`1px solid ${voiceActive?"rgba(220,38,38,.5)":"var(--line)"}`,borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:voiceActive?"#DC2626":"var(--ink-3)",cursor:"pointer"}}>🎤 {voiceActive?"…":""}</button>
