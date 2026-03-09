@@ -2,7 +2,7 @@
    PRODASH — INTELLIGENT EDITION
    Full light theme · AI everywhere
    ══════════════════════════════════════════ */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Martian+Mono:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Martian+Mono:wght@300;400;500;600&display=swap');
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
@@ -39,9 +39,11 @@
   --s3:0 12px 40px rgba(13,15,26,.12);
   --r1:4px;--r2:8px;--r3:12px;--r4:16px;--r5:24px;
   --sw:224px;--th:52px;
-  font-family:'Outfit',sans-serif;
+  font-family:'Inter',sans-serif;
   font-size:13px;line-height:1.5;color:var(--ink);
   -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  letter-spacing:-.01em;
 }
 html,body,#root{height:100%;background:var(--bg)}
 ::-webkit-scrollbar{width:3px;height:3px}
@@ -146,7 +148,7 @@ html,body,#root{height:100%;background:var(--bg)}
   display:inline-flex;align-items:center;gap:6px;
   padding:5px 12px;border-radius:99px;border:1px solid var(--ai-border);
   background:var(--white);color:var(--indigo);font-size:11px;font-weight:500;
-  cursor:pointer;font-family:'Outfit',sans-serif;transition:all .15s;
+  cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s;
 }
 .ai-btn:hover{background:var(--ai-bg);border-color:var(--blue);box-shadow:0 0 10px rgba(79,70,229,.12);transform:translateY(-1px)}
 .ai-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
@@ -179,7 +181,7 @@ html,body,#root{height:100%;background:var(--bg)}
 .gap4{gap:4px}.gap6{gap:6px}.gap8{gap:8px}.gap10{gap:10px}.gap12{gap:12px}.gap16{gap:16px}.gap20{gap:20px}.wrap{flex-wrap:wrap}
 
 /* ── Buttons ── */
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--r2);border:none;cursor:pointer;font-family:'Outfit',sans-serif;font-size:12.5px;font-weight:500;transition:all .15s;white-space:nowrap;letter-spacing:.2px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--r2);border:none;cursor:pointer;font-family:'Inter',sans-serif;font-size:12.5px;font-weight:500;transition:all .15s;white-space:nowrap;letter-spacing:.2px}
 .btn-primary{background:var(--blue);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.25)}
 .btn-primary:hover{background:#1D55E0;box-shadow:0 4px 14px rgba(37,99,235,.35);transform:translateY(-1px)}
 .btn-ghost{background:transparent;color:var(--ink-2);border:1px solid var(--line-2)}
@@ -194,7 +196,7 @@ html,body,#root{height:100%;background:var(--bg)}
 .btn:disabled{opacity:.45;cursor:not-allowed;transform:none!important}.btn-icon{padding:6px;border-radius:var(--r2)}
 
 /* ── Inputs ── */
-.inp,.sel,.ta{background:var(--white);border:1px solid var(--line-2);border-radius:var(--r2);color:var(--ink);padding:9px 12px;font-family:'Outfit',sans-serif;font-size:13px;width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
+.inp,.sel,.ta{background:var(--white);border:1px solid var(--line-2);border-radius:var(--r2);color:var(--ink);padding:9px 12px;font-family:'Inter',sans-serif;font-size:13px;width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
 .inp:focus,.sel:focus,.ta:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
 .inp::placeholder,.ta::placeholder{color:var(--ink-5)}
 .ta{resize:vertical;min-height:72px}
@@ -210,7 +212,7 @@ html,body,#root{height:100%;background:var(--bg)}
 
 /* ── Tabs ── */
 .tab-bar{display:flex;background:var(--surface);padding:3px;border-radius:var(--r2);border:1px solid var(--line);gap:2px}
-.tab-btn{flex:1;padding:7px 12px;border:none;border-radius:7px;background:transparent;color:var(--ink-3);cursor:pointer;font-family:'Outfit',sans-serif;font-size:12px;font-weight:500;transition:all .15s;white-space:nowrap}
+.tab-btn{flex:1;padding:7px 12px;border:none;border-radius:7px;background:transparent;color:var(--ink-3);cursor:pointer;font-family:'Inter',sans-serif;font-size:12px;font-weight:500;transition:all .15s;white-space:nowrap}
 .tab-btn:hover{color:var(--ink-2);background:rgba(255,255,255,.7)}
 .tab-btn.active{background:var(--white);color:var(--ink);box-shadow:var(--s0);font-weight:600}
 .pill-tabs{display:flex;gap:5px;flex-wrap:wrap}
