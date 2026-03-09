@@ -679,6 +679,395 @@ function ShortcutsModal({onClose}) {
 // ══════════════════════════════════════════════════════════
 //  MAIN APP
 // ══════════════════════════════════════════════════════════
+function BrainDumpView({addTask,addNote,addReminder,showToast,apiKey,activeBrand,brandTab}) {
+  const [dumpText,setDumpText]=useState("");
+  const [dumpLoading,setDumpLoading]=useState(false);
+  const [dumpResult,setDumpResult]=useState(null);
+  const [dumpErr,setDumpErr]=useState("");
+  const process=async()=>{
+    if(!dumpText.trim())return;
+    setDumpLoading(true);setDumpErr("");setDumpResult(null);
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,
+          system:`You sort brain dumps for a professional managing 6 betting/gaming brands: Goldbet,Ultrabet,BoostBet,AllBets,BetGold,TechDev.
+Return ONLY valid JSON, no markdown. Format:
+{
+"tasks":[{"title":"string","priority":"medium","brand":"goldbet","tab":"Reporting","category":"Compliance","estimatedMins":30,"note":""}],
+"reminders":[{"title":"string","date":"YYYY-MM-DD","time":"09:00","brand":""}],
+"notes":[{"title":"string","content":"string"}],
+"insights":"string (1-2 sentence summary of what this brain dump reveals)"
+}
+priority: low|medium|high|urgent. brand: goldbet|ultrabet|boostbet|allbets|betgold|techdev or "". tab: Reporting|Compliance|Accounting.`,
+          messages:[{role:"user",content:"Sort this brain dump: "+dumpText}]})});
+
+      const json=await res.json();
+      const text=json.content?.filter(c=>c.type==="text").map(c=>c.text).join("")||"";
+      const parsed=JSON.parse(text.replace(/```json|```/g,"").trim());
+      setDumpResult(parsed);
+    }catch(e){setDumpErr("Could not process — try again.");}
+    setDumpLoading(false);
+  };
+  const applyAll=()=>{
+    if(!dumpResult)return;
+    dumpResult.tasks?.forEach(t=>addTask(t));
+    dumpResult.reminders?.forEach(r=>addReminder(r));
+    dumpResult.notes?.forEach(n=>addNote(n));
+    setDumpText("");setDumpResult(null);
+    showToast("Brain dump sorted! "+(dumpResult.tasks?.length||0)+" tasks, "+(dumpResult.reminders?.length||0)+" reminders, "+(dumpResult.notes?.length||0)+" notes added.");
+  };
+  return(
+    <div className="anim-up">
+      <div className="briefing-card" style={{marginBottom:20,borderColor:"rgba(124,58,237,.3)",background:"linear-gradient(135deg,rgba(124,58,237,.06),rgba(79,70,229,.04))"}}>
+        <div className="briefing-title" style={{color:"#7C3AED"}}>⚡ BRAIN DUMP</div>
+        <div style={{fontSize:13,color:"var(--ink-3)",lineHeight:1.7,marginBottom:16}}>
+          Type <strong>everything</strong> in your head right now — tasks, worries, ideas, reminders, random thoughts. Don't organise. Don't filter. Just dump it all out. AI will sort it instantly.
+        </div>
+        {!dumpResult?(
+          <>
+            <textarea value={dumpText} onChange={e=>setDumpText(e.target.value)} className="ta"
+              style={{minHeight:200,fontSize:14,lineHeight:1.8,letterSpacing:.01,fontFamily:"inherit"}}
+              placeholder="e.g. Need to call compliance team about Goldbet regs... Ultrabet reporting due Friday... Follow up accounting month-end..."
+              autoFocus/>
+            {dumpErr&&<div style={{color:"#DC2626",fontSize:12.5,marginTop:8}}>{dumpErr}</div>}
+            <div style={{display:"flex",gap:10,marginTop:14,alignItems:"center"}}>
+              <button className="btn btn-primary" style={{padding:"10px 28px",fontSize:14}} onClick={process} disabled={dumpLoading||!dumpText.trim()}>
+                {dumpLoading?<span style={{display:"flex",alignItems:"center",gap:8}}><span className="typing-dots"><span/><span/><span/></span> Sorting...</span>:"⚡ Sort My Brain"}
+              </button>
+              {dumpText.length>0&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:"var(--ink-4)"}}>{dumpText.split(/\s+/).filter(Boolean).length} words</span>}
+            </div>
+          </>
+        ):(
+          <div>
+            {dumpResult.insights&&<div style={{background:"rgba(79,70,229,.08)",border:"1px solid rgba(79,70,229,.2)",borderRadius:10,padding:"12px 16px",marginBottom:16}}>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"var(--indigo)",letterSpacing:1.5,marginBottom:5,textTransform:"uppercase"}}>◎ WHAT THIS REVEALS</div>
+              <div style={{fontSize:13,color:"var(--ink-2)",lineHeight:1.7}}>{dumpResult.insights}</div>
+            </div>}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
+              {[{label:"TASKS",items:dumpResult.tasks||[],icon:"✓",color:"#2563EB",render:t=><div key={t.title} style={{fontSize:12,padding:"8px 10px",background:"var(--surface)",borderRadius:7,marginBottom:5}}><div style={{fontWeight:500,color:"var(--ink)",marginBottom:3}}>{t.title}</div><div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{t.brand&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:BRANDS.find(b=>b.id===t.brand)?.color||"var(--ink-4)"}}>{BRANDS.find(b=>b.id===t.brand)?.emoji} {t.brand}</span>}<span className={`badge ${t.priority==="urgent"?"badge-violet":t.priority==="high"?"badge-red":"badge-amber"}`}>{t.priority}</span></div></div>},
+               {label:"REMINDERS",items:dumpResult.reminders||[],icon:"🔔",color:"#7C3AED",render:r=><div key={r.title} style={{fontSize:12,padding:"8px 10px",background:"var(--surface)",borderRadius:7,marginBottom:5}}><div style={{fontWeight:500,color:"var(--ink)",marginBottom:2}}>{r.title}</div><div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--ink-4)"}}>{r.date} {r.time}</div></div>},
+               {label:"NOTES",items:dumpResult.notes||[],icon:"📌",color:"#D97706",render:n=><div key={n.title} style={{fontSize:12,padding:"8px 10px",background:"var(--surface)",borderRadius:7,marginBottom:5}}><div style={{fontWeight:500,color:"var(--ink)",marginBottom:2}}>{n.title||"Note"}</div><div style={{fontSize:11,color:"var(--ink-4)",lineHeight:1.5}}>{n.content?.slice(0,80)}</div></div>}
+              ].map(col=>(
+                <div key={col.label}>
+                  <div style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:col.color,letterSpacing:1.5,marginBottom:8,textTransform:"uppercase"}}>{col.icon} {col.label} ({col.items.length})</div>
+                  {col.items.map(col.render)}
+                  {!col.items.length&&<div style={{fontSize:11,color:"var(--ink-4)",padding:"8px 0"}}>None found</div>}
+                </div>
+              ))}
+            </div>
+            <div className="row gap8">
+              <button className="btn btn-primary" style={{padding:"10px 28px"}} onClick={applyAll}>✓ Add Everything to PRODASH</button>
+              <button className="btn btn-ghost" onClick={()=>setDumpResult(null)}>← Edit</button>
+              <button className="btn btn-ghost" onClick={()=>{setDumpText("");setDumpResult(null);}}>Start Over</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ══════════════════════════════════════════════════════════
+//  WORK JOURNAL
+// ══════════════════════════════════════════════════════════
+
+function JournalView({data,saveJournalEntry,showToast}) {
+  const today=todayStr();
+  const [selDate,setSelDate]=useState(today);
+  const entry=data.journal?.[selDate]||{};
+  const [f,setF]=useState({worked:entry.worked||"",mattered:entry.mattered||"",mind:entry.mind||"",tomorrow:entry.tomorrow||""});
+  const [saved,setSaved]=useState(false);
+  const save=()=>{saveJournalEntry(selDate,f);setSaved(true);setTimeout(()=>setSaved(false),2000);showToast("Journal saved");};
+  const allEntries=Object.entries(data.journal||{}).sort((a,b)=>b[0].localeCompare(a[0]));
+  const todayLog=(data.timelog||[]).filter(l=>l.ts?.startsWith(today)&&l.type!=="session_start").slice(0,8);
+  return(
+    <div className="anim-up">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+        <div><div className="section-title" style={{marginBottom:4}}>📖 WORK JOURNAL</div><div style={{fontSize:12,color:"var(--ink-4)"}}>Your private daily record. {allEntries.length} entries so far.</div></div>
+        <input type="date" className="inp" style={{width:160}} value={selDate} onChange={e=>{setSelDate(e.target.value);const ent=data.journal?.[e.target.value]||{};setF({worked:ent.worked||"",mattered:ent.mattered||"",mind:ent.mind||"",tomorrow:ent.tomorrow||""}); setSaved(false);}}/>
+      </div>
+      <div className="g2 gap14">
+        <div>
+          {selDate===today&&todayLog.length>0&&<div className="card mb14">
+            <div className="card-header"><span className="card-title">TODAY'S ACTIVITY (auto)</span></div>
+            {todayLog.map(l=><div key={l.id} style={{fontSize:12,color:"var(--ink-3)",padding:"5px 0",borderBottom:"1px solid var(--surface)"}}>{fmtTime(l.ts)} — {l.title}</div>)}
+          </div>}
+          {[{k:"worked",l:"What did you actually work on?",p:"Tasks completed, meetings, calls, research..."},
+            {k:"mattered",l:"What mattered most today?",p:"The one thing that moved the needle..."},
+            {k:"mind",l:"What's in your head right now?",p:"Worries, unfinished thoughts, things you're carrying..."},
+            {k:"tomorrow",l:"Tomorrow's single most important thing",p:"Just one. What would make tomorrow a success?"},
+          ].map(q=>(
+            <div className="form-group mb14" key={q.k}>
+              <label className="form-label" style={{fontSize:12.5,marginBottom:6}}>{q.l}</label>
+              <textarea className="ta" style={{minHeight:72,fontSize:13}} placeholder={q.p}
+                value={f[q.k]} onChange={e=>setF(p=>({...p,[q.k]:e.target.value}))}/>
+            </div>
+          ))}
+          <button className="btn btn-primary" style={{padding:"10px 24px"}} onClick={save}>
+            {saved?"✓ Saved!":"💾 Save Entry"}
+          </button>
+        </div>
+        <div>
+          <div className="card">
+            <div className="card-header"><span className="card-title">PAST ENTRIES</span></div>
+            {!allEntries.length&&<div style={{fontSize:12,color:"var(--ink-4)",padding:"12px 0",textAlign:"center"}}>No entries yet — start today</div>}
+            {allEntries.slice(0,15).map(([date,ent])=>(
+              <div key={date} onClick={()=>{setSelDate(date);setF({worked:ent.worked||"",mattered:ent.mattered||"",mind:ent.mind||"",tomorrow:ent.tomorrow||""});setSaved(false);}}
+                style={{padding:"10px 0",borderBottom:"1px solid var(--surface)",cursor:"pointer",transition:"opacity .1s"}} onMouseEnter={e=>e.currentTarget.style.opacity=".7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                  <span style={{fontFamily:"Martian Mono,monospace",fontSize:10,fontWeight:600,color:date===today?"#2563EB":"var(--ink-3)"}}>{date===today?"TODAY":fmtDate(date)}</span>
+                  <span style={{fontSize:10,color:"var(--ink-4)"}}>{[ent.worked,ent.mattered,ent.mind,ent.tomorrow].filter(Boolean).length}/4 filled</span>
+                </div>
+                {ent.mattered&&<div style={{fontSize:11.5,color:"var(--ink-3)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ent.mattered}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ══════════════════════════════════════════════════════════
+//  GOALS / OKRs
+// ══════════════════════════════════════════════════════════
+
+function GoalsView({data,addGoal,updateGoalProgress,deleteGoal,showToast,fetchInsight,insightLoading,insights}) {
+  const [showAdd,setShowAdd]=useState(false);
+  const [f,setF]=useState({title:"",description:"",targetDate:"",brand:"",category:"",targetValue:"",unit:""});
+  const goals=data.goals||[];
+  const active=goals.filter(g=>!g.done);const done=goals.filter(g=>g.done);
+  return(
+    <div className="anim-up">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+        <div><div className="section-title" style={{marginBottom:4}}>🎯 GOALS</div><div style={{fontSize:12,color:"var(--ink-4)"}}>{active.length} active · {done.length} achieved</div></div>
+        <div className="row gap8">
+          <button className="ai-btn" disabled={insightLoading["goals"]} onClick={()=>fetchInsight("goals","Review my goals vs my current task/time data. Am I working on the right things? 3 specific insights.")}>◎ AI Review</button>
+          <button className="btn btn-primary btn-sm" onClick={()=>setShowAdd(p=>!p)}>+ New Goal</button>
+        </div>
+      </div>
+      {insights["goals"]&&<AIPanel insight={insights["goals"]} loading={false} label="◎ AI GOAL REVIEW"/>}
+      {showAdd&&(
+        <div className="card mb16" style={{borderColor:"rgba(37,99,235,.3)",background:"rgba(37,99,235,.03)"}}>
+          <div className="card-header"><span className="card-title">NEW GOAL</span><button className="modal-close" onClick={()=>setShowAdd(false)}>✕</button></div>
+          <div className="form-group mb10"><label className="form-label">Goal Title *</label><input className="inp" placeholder="e.g. Get all brands to A health grade by June" value={f.title} onChange={e=>setF(p=>({...p,title:e.target.value}))} autoFocus/></div>
+          <div className="form-row mb10">
+            <div className="form-group"><label className="form-label">Target Date</label><input className="inp" type="date" value={f.targetDate} onChange={e=>setF(p=>({...p,targetDate:e.target.value}))}/></div>
+            <div className="form-group"><label className="form-label">Brand (optional)</label>
+              <select className="sel" value={f.brand} onChange={e=>setF(p=>({...p,brand:e.target.value}))}><option value="">— All brands —</option>{BRANDS.map(b=><option key={b.id} value={b.id}>{b.emoji} {b.name}</option>)}</select>
+            </div>
+          </div>
+          <div className="form-group mb10"><label className="form-label">Description / Why this matters</label><textarea className="ta" style={{minHeight:60}} value={f.description} onChange={e=>setF(p=>({...p,description:e.target.value}))}/></div>
+          <div className="row gap8"><button className="btn btn-primary btn-sm" onClick={()=>{addGoal(f);setShowAdd(false);setF({title:"",description:"",targetDate:"",brand:"",category:"",targetValue:"",unit:""});}}>Add Goal</button><button className="btn btn-ghost btn-sm" onClick={()=>setShowAdd(false)}>Cancel</button></div>
+        </div>
+      )}
+      {!goals.length&&<div className="empty-state"><div className="empty-icon">🎯</div><div className="empty-title">No goals yet</div><div className="empty-desc">Set a goal to give your tasks meaning and direction</div></div>}
+      {active.map(g=>{
+        const brand=BRANDS.find(b=>b.id===g.brand);const daysLeft=g.targetDate?Math.ceil((new Date(g.targetDate)-new Date())/86400000):null;
+        return(
+          <div key={g.id} className="card mb10" style={{borderLeft:`3px solid ${brand?.color||"#2563EB"}`}}>
+            <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:600,color:"var(--ink)",marginBottom:6}}>{g.title}</div>
+                {g.description&&<div style={{fontSize:12.5,color:"var(--ink-3)",marginBottom:8,lineHeight:1.6}}>{g.description}</div>}
+                <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:10}}>
+                  {brand&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:brand.color}}>{brand.emoji} {brand.name}</span>}
+                  {daysLeft!==null&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:daysLeft<7?"#DC2626":daysLeft<30?"#D97706":"var(--ink-4)"}}>📅 {daysLeft>0?daysLeft+"d left":"Overdue"}</span>}
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{flex:1,height:6,background:"var(--surface)",borderRadius:99,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:g.progress+"%",background:brand?.color||"#2563EB",borderRadius:99,transition:"width .5s"}}/>
+                  </div>
+                  <span style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:"var(--ink-3)",width:30}}>{g.progress}%</span>
+                  <input type="range" min={0} max={100} value={g.progress} onChange={e=>updateGoalProgress(g.id,+e.target.value,+e.target.value===100)} style={{width:80}}/>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:5}}>
+                <button className="btn btn-primary btn-xs" onClick={()=>updateGoalProgress(g.id,100,true)}>✓ Done</button>
+                <button className="task-del" style={{opacity:1}} onClick={()=>deleteGoal(g.id)}>✕</button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      {done.length>0&&<div>
+        <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"#059669",letterSpacing:2,margin:"16px 0 10px",textTransform:"uppercase"}}>✓ ACHIEVED ({done.length})</div>
+        {done.map(g=><div key={g.id} style={{display:"flex",gap:10,padding:"10px 14px",border:"1px solid var(--line)",borderRadius:8,marginBottom:6,opacity:.6}}>
+          <span style={{fontSize:16}}>🏆</span><div style={{flex:1}}><div style={{fontSize:13,fontWeight:500,color:"var(--ink)",textDecoration:"line-through"}}>{g.title}</div><div style={{fontSize:10.5,color:"var(--ink-4)",marginTop:2}}>Achieved {fmtDate(g.doneAt)}</div></div>
+          <button className="task-del" style={{opacity:1}} onClick={()=>deleteGoal(g.id)}>✕</button>
+        </div>)}
+      </div>}
+    </div>
+  );
+};
+
+// ══════════════════════════════════════════════════════════
+//  DECISION LOG
+// ══════════════════════════════════════════════════════════
+
+function DecisionsView({data,addDecision,deleteDecision,showToast,fetchInsight,insightLoading,insights}) {
+  const [showAdd,setShowAdd]=useState(false);
+  const [f,setF]=useState({title:"",context:"",decision:"",reasoning:"",brand:""});
+  const decisions=data.decisions||[];
+  return(
+    <div className="anim-up">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+        <div><div className="section-title" style={{marginBottom:4}}>⚖ DECISION LOG</div><div style={{fontSize:12,color:"var(--ink-4)"}}>{decisions.length} decisions recorded</div></div>
+        <div className="row gap8">
+          <button className="ai-btn" disabled={insightLoading["decisions"]} onClick={()=>fetchInsight("decisions","Analyse my decision patterns. What do I tend to decide? Any recurring themes or risks? 2-3 insights.")}>◎ AI Patterns</button>
+          <button className="btn btn-primary btn-sm" onClick={()=>setShowAdd(p=>!p)}>+ Log Decision</button>
+        </div>
+      </div>
+      {insights["decisions"]&&<AIPanel insight={insights["decisions"]} loading={false} label="◎ DECISION PATTERNS"/>}
+      {showAdd&&(
+        <div className="card mb16" style={{borderColor:"rgba(124,58,237,.3)"}}>
+          <div className="card-header"><span className="card-title">LOG A DECISION</span><button className="modal-close" onClick={()=>setShowAdd(false)}>✕</button></div>
+          <div className="form-group mb10"><label className="form-label">Decision Title *</label><input className="inp" placeholder="e.g. Delayed Goldbet compliance audit until Q3" value={f.title} onChange={e=>setF(p=>({...p,title:e.target.value}))} autoFocus/></div>
+          <div className="form-row mb10">
+            <div className="form-group"><label className="form-label">Brand</label>
+              <select className="sel" value={f.brand} onChange={e=>setF(p=>({...p,brand:e.target.value}))}><option value="">— General —</option>{BRANDS.map(b=><option key={b.id} value={b.id}>{b.emoji} {b.name}</option>)}</select>
+            </div>
+          </div>
+          <div className="form-group mb10"><label className="form-label">Context — what situation led to this?</label><textarea className="ta" style={{minHeight:60}} placeholder="What was happening? What were the options?" value={f.context} onChange={e=>setF(p=>({...p,context:e.target.value}))}/></div>
+          <div className="form-group mb10"><label className="form-label">The decision made</label><textarea className="ta" style={{minHeight:48}} placeholder="Exactly what was decided..." value={f.decision} onChange={e=>setF(p=>({...p,decision:e.target.value}))}/></div>
+          <div className="form-group mb14"><label className="form-label">Reasoning — why this choice?</label><textarea className="ta" style={{minHeight:60}} placeholder="Why was this the right call?" value={f.reasoning} onChange={e=>setF(p=>({...p,reasoning:e.target.value}))}/></div>
+          <div className="row gap8"><button className="btn btn-primary btn-sm" onClick={()=>{addDecision(f);setShowAdd(false);setF({title:"",context:"",decision:"",reasoning:"",brand:""});}}>Log Decision</button><button className="btn btn-ghost btn-sm" onClick={()=>setShowAdd(false)}>Cancel</button></div>
+        </div>
+      )}
+      {!decisions.length&&<div className="empty-state"><div className="empty-icon">⚖</div><div className="empty-title">No decisions logged</div><div className="empty-desc">Start recording important decisions. In 6 months you'll see clear patterns in your thinking.</div></div>}
+      {decisions.map(d=>{const brand=BRANDS.find(b=>b.id===d.brand);return(
+        <div key={d.id} className="card mb10">
+          <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+            <div style={{flex:1}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                <div style={{fontSize:14,fontWeight:600,color:"var(--ink)"}}>{d.title}</div>
+                {brand&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:brand.color}}>{brand.emoji} {brand.name}</span>}
+              </div>
+              {d.context&&<div style={{marginBottom:8}}><span className="form-label">CONTEXT</span><div style={{fontSize:12.5,color:"var(--ink-3)",lineHeight:1.6,marginTop:2}}>{d.context}</div></div>}
+              {d.decision&&<div style={{marginBottom:8,background:"rgba(37,99,235,.06)",borderRadius:7,padding:"8px 12px"}}><span className="form-label">DECISION</span><div style={{fontSize:12.5,color:"var(--ink-2)",lineHeight:1.6,marginTop:2,fontWeight:500}}>{d.decision}</div></div>}
+              {d.reasoning&&<div><span className="form-label">REASONING</span><div style={{fontSize:12.5,color:"var(--ink-3)",lineHeight:1.6,marginTop:2}}>{d.reasoning}</div></div>}
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--ink-4)",marginTop:8}}>{fmtDateTime(d.createdAt)}</div>
+            </div>
+            <button className="task-del" style={{opacity:1}} onClick={()=>deleteDecision(d.id)}>✕</button>
+          </div>
+        </div>
+      );})}
+    </div>
+  );
+};
+
+// ══════════════════════════════════════════════════════════
+//  WEEKLY PLAN
+// ══════════════════════════════════════════════════════════
+
+function WeekPlanView({data,stats,bStats,acctData,setCommitment,weeklyReviews,setWeeklyReviews,showToast,setActiveBrand,setBrandTab,setView}) {
+  const today=todayStr();const weekNum=Math.floor(Date.now()/604800000);
+  const thisWeek=weeklyReviews.find(w=>w.week===weekNum)||{};
+  const [rating,setRating]=useState(thisWeek.rating||0);
+  const [reflection,setReflection]=useState(thisWeek.reflection||"");
+  const [nextWeek,setNextWeek]=useState(thisWeek.nextWeek||"");
+  const allTasks=Object.values(data.tasks).flat();
+  const weekAgo=new Date(Date.now()-7*86400000).toISOString().split("T")[0];
+  const weekDone=allTasks.filter(t=>t.done&&t.doneAt>=weekAgo);
+  const upcoming=data.reminders.filter(r=>r.date>=today).slice(0,6);
+  const dueSoon=allTasks.filter(t=>!t.done&&t.due&&t.due>=today&&t.due<=new Date(Date.now()+7*86400000).toISOString().split("T")[0]).sort((a,b)=>a.due.localeCompare(b.due));
+  const stale=allTasks.filter(t=>!t.done&&taskAgeDays(t.createdAt)>14).slice(0,5);
+  const taskDebt=allTasks.filter(t=>!t.done&&taskAgeDays(t.createdAt)>14);
+  const debtHours=taskDebt.reduce((s,t)=>s+(t.estimatedMins||30),0)/60;
+  const saveReview=()=>{const r={week:weekNum,date:today,rating,reflection,nextWeek};const upd=[...weeklyReviews.filter(w=>w.week!==weekNum),r];setWeeklyReviews(upd);saveWeekly(upd);showToast("Weekly review saved");};
+  return(
+    <div className="anim-up">
+      <div className="section-title" style={{marginBottom:4}}>📅 WEEKLY PLAN</div>
+      <div style={{fontSize:12,color:"var(--ink-4)",marginBottom:20}}>Plan your week, track your commitment, review your performance.</div>
+
+      {/* Task debt */}
+      {taskDebt.length>0&&<div style={{background:"rgba(220,38,38,.06)",border:"1px solid rgba(220,38,38,.2)",borderRadius:12,padding:"14px 18px",marginBottom:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+          <span style={{fontSize:18}}>💳</span>
+          <div style={{fontFamily:"Martian Mono,monospace",fontSize:12,fontWeight:700,color:"#DC2626"}}>TASK DEBT: {taskDebt.length} tasks ({debtHours.toFixed(1)} hours owed)</div>
+        </div>
+        <div style={{fontSize:12.5,color:"var(--ink-3)",marginBottom:10}}>These tasks have been pending for 14+ days. They are debt accumulating against your productivity.</div>
+        {stale.map(t=>{const[bId,tab]=t.key?.split("_")||[];const brand=BRANDS.find(b=>b.id===bId);return(
+          <div key={t.id} style={{display:"flex",gap:10,padding:"7px 0",borderBottom:"1px solid rgba(220,38,38,.1)",alignItems:"center"}}>
+            <div style={{flex:1}}><div style={{fontSize:12.5,fontWeight:500,color:"var(--ink)"}}>{t.title}</div><div style={{fontSize:10.5,color:"var(--ink-4)"}}>{brand?.emoji} {brand?.name} · {Math.floor(taskAgeDays(t.createdAt))}d old</div></div>
+            <button className="btn btn-ghost btn-xs" onClick={()=>{setActiveBrand(bId);setBrandTab(tab);setView("brand");}}>View</button>
+          </div>
+        );})}
+        {taskDebt.length>5&&<div style={{fontSize:11,color:"rgba(220,38,38,.6)",marginTop:6}}>+{taskDebt.length-5} more in task debt</div>}
+      </div>}
+
+      {/* Accountability */}
+      <div className="card mb14">
+        <div className="card-header"><span className="card-title">🤝 WEEKLY COMMITMENT</span></div>
+        {acctData.lastWeekCommit>0&&<div style={{padding:"10px 0",borderBottom:"1px solid var(--surface)",marginBottom:12}}>
+          <div style={{fontSize:12.5,color:"var(--ink-3)"}}>Last week you committed to <strong>{acctData.lastWeekCommit}</strong> tasks. You completed <strong>{acctData.lastWeekDone}</strong>.</div>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginTop:8}}>
+            <div style={{flex:1,height:6,background:"var(--surface)",borderRadius:99}}>
+              <div style={{height:"100%",width:Math.min(100,acctData.lastWeekPct)+"%",background:acctData.lastWeekPct>=100?"#059669":acctData.lastWeekPct>=70?"#D97706":"#DC2626",borderRadius:99}}/>
+            </div>
+            <span style={{fontFamily:"Martian Mono,monospace",fontSize:11,fontWeight:600,color:acctData.lastWeekPct>=100?"#059669":acctData.lastWeekPct>=70?"#D97706":"#DC2626"}}>{acctData.lastWeekPct}% follow-through</span>
+          </div>
+        </div>}
+        <div style={{fontSize:12.5,color:"var(--ink-3)",marginBottom:10}}>This week I commit to completing <strong>{acctData.commitment||"?"}</strong> tasks.</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {[5,10,15,20,25,30].map(n=><button key={n} className={`btn btn-xs ${acctData.commitment===n?"btn-primary":"btn-ghost"}`} onClick={()=>setCommitment(n)}>{n}</button>)}
+        </div>
+        {acctData.commitment>0&&<div style={{marginTop:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}><span style={{fontSize:12,color:"var(--ink-3)"}}>Progress this week</span><span style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:"#2563EB"}}>{stats.weekDone}/{acctData.commitment}</span></div>
+          <div style={{height:8,background:"var(--surface)",borderRadius:99,overflow:"hidden"}}>
+            <div style={{height:"100%",width:Math.min(100,Math.round(stats.weekDone/acctData.commitment*100))+"%",background:"#2563EB",borderRadius:99,transition:"width .5s"}}/>
+          </div>
+        </div>}
+      </div>
+
+      <div className="g2 gap14 mb14">
+        {/* Due this week */}
+        <div className="card">
+          <div className="card-header"><span className="card-title">DUE THIS WEEK ({dueSoon.length})</span></div>
+          {!dueSoon.length&&<div style={{fontSize:12,color:"var(--ink-4)",padding:"8px 0"}}>Nothing due this week</div>}
+          {dueSoon.map(t=>{const[bId,tab]=t.key?.split("_")||[];const brand=BRANDS.find(b=>b.id===bId);return(
+            <div key={t.id} style={{display:"flex",gap:8,padding:"8px 0",borderBottom:"1px solid var(--surface)",alignItems:"center"}}>
+              <div style={{flex:1}}><div style={{fontSize:12.5,fontWeight:500,color:"var(--ink)"}}>{t.title}</div><div style={{fontSize:10.5,color:"var(--ink-4)",marginTop:2}}>{brand?.emoji} {brand?.name} · Due {fmtDate(t.due)}</div></div>
+              <span className={`badge ${t.priority==="urgent"?"badge-violet":t.priority==="high"?"badge-red":"badge-amber"}`}>{t.priority}</span>
+            </div>
+          );})}
+        </div>
+        {/* Upcoming reminders */}
+        <div className="card">
+          <div className="card-header"><span className="card-title">UPCOMING REMINDERS</span></div>
+          {!upcoming.length&&<div style={{fontSize:12,color:"var(--ink-4)",padding:"8px 0"}}>No upcoming reminders</div>}
+          {upcoming.map(r=>{const brand=BRANDS.find(b=>b.id===r.brand);return(
+            <div key={r.id} style={{display:"flex",gap:8,padding:"8px 0",borderBottom:"1px solid var(--surface)",alignItems:"center"}}>
+              <span style={{fontSize:14}}>🔔</span>
+              <div style={{flex:1}}><div style={{fontSize:12.5,fontWeight:500}}>{r.title}</div><div style={{fontSize:10.5,color:"var(--ink-4)",marginTop:2}}>{fmtDate(r.date)}{brand?` · ${brand.emoji} ${brand.name}`:""}</div></div>
+            </div>
+          );})}
+        </div>
+      </div>
+
+      {/* Weekly review */}
+      <div className="card">
+        <div className="card-header"><span className="card-title">THIS WEEK'S REVIEW</span><span style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--ink-4)"}}>{weekDone.length} tasks completed</span></div>
+        <div style={{marginBottom:14}}>
+          <div className="form-label" style={{marginBottom:8}}>Rate your week</div>
+          <div style={{display:"flex",gap:8}}>
+            {[1,2,3,4,5].map(n=><button key={n} onClick={()=>setRating(n)} style={{width:40,height:40,borderRadius:8,border:`2px solid ${rating>=n?"#F59E0B":"var(--line)"}`,background:rating>=n?"rgba(245,158,11,.1)":"transparent",fontSize:18,cursor:"pointer"}}>{"⭐"}</button>)}
+            {rating>0&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:"#F59E0B",alignSelf:"center",marginLeft:4}}>{["","POOR","BELOW AVERAGE","AVERAGE","GOOD","EXCELLENT"][rating]}</span>}
+          </div>
+        </div>
+        <div className="form-group mb10"><label className="form-label">What worked, what didn't?</label><textarea className="ta" style={{minHeight:72}} value={reflection} onChange={e=>setReflection(e.target.value)} placeholder="Wins, misses, surprises..."/></div>
+        <div className="form-group mb14"><label className="form-label">What will I do differently next week?</label><textarea className="ta" style={{minHeight:60}} value={nextWeek} onChange={e=>setNextWeek(e.target.value)} placeholder="One specific change..."/></div>
+        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <button className="btn btn-primary btn-sm" onClick={saveReview}>💾 Save Review</button>
+          {weeklyReviews.length>0&&<span style={{fontSize:12,color:"var(--ink-4)"}}>{weeklyReviews.length} past reviews saved</span>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 export default function App() {
   const [data,setData]            = useState(loadLocal);
   const [view,setView]            = useState("dashboard");
@@ -2280,389 +2669,15 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
   // ══════════════════════════════════════════════════════════
   //  BRAIN DUMP
   // ══════════════════════════════════════════════════════════
-  const renderBrainDump=()=>{
-    const [dumpText,setDumpText]=useState("");
-    const [dumpLoading,setDumpLoading]=useState(false);
-    const [dumpResult,setDumpResult]=useState(null);
-    const [dumpErr,setDumpErr]=useState("");
-    const process=async()=>{
-      if(!dumpText.trim())return;
-      setDumpLoading(true);setDumpErr("");setDumpResult(null);
-      try{
-        const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
-          headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-          body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,
-            system:`You sort brain dumps for a professional managing 6 betting/gaming brands: Goldbet,Ultrabet,BoostBet,AllBets,BetGold,TechDev.
-Return ONLY valid JSON, no markdown. Format:
-{
-  "tasks":[{"title":"string","priority":"medium","brand":"goldbet","tab":"Reporting","category":"Compliance","estimatedMins":30,"note":""}],
-  "reminders":[{"title":"string","date":"YYYY-MM-DD","time":"09:00","brand":""}],
-  "notes":[{"title":"string","content":"string"}],
-  "insights":"string (1-2 sentence summary of what this brain dump reveals)"
-}
-priority: low|medium|high|urgent. brand: goldbet|ultrabet|boostbet|allbets|betgold|techdev or "". tab: Reporting|Compliance|Accounting.`,
-            messages:[{role:"user",content:"Sort this brain dump: "+dumpText}]})});
+  const renderBrainDump=()=><BrainDumpView addTask={addTask} addNote={addNote} addReminder={addReminder} showToast={showToast} apiKey={API_KEY} activeBrand={activeBrand} brandTab={brandTab}/>;
 
-        const json=await res.json();
-        const text=json.content?.filter(c=>c.type==="text").map(c=>c.text).join("")||"";
-        const parsed=JSON.parse(text.replace(/```json|```/g,"").trim());
-        setDumpResult(parsed);
-      }catch(e){setDumpErr("Could not process — try again.");}
-      setDumpLoading(false);
-    };
-    const applyAll=()=>{
-      if(!dumpResult)return;
-      dumpResult.tasks?.forEach(t=>addTask(t));
-      dumpResult.reminders?.forEach(r=>addReminder(r));
-      dumpResult.notes?.forEach(n=>addNote(n));
-      setDumpText("");setDumpResult(null);
-      showToast("Brain dump sorted! "+(dumpResult.tasks?.length||0)+" tasks, "+(dumpResult.reminders?.length||0)+" reminders, "+(dumpResult.notes?.length||0)+" notes added.");
-    };
-    return(
-      <div className="anim-up">
-        <div className="briefing-card" style={{marginBottom:20,borderColor:"rgba(124,58,237,.3)",background:"linear-gradient(135deg,rgba(124,58,237,.06),rgba(79,70,229,.04))"}}>
-          <div className="briefing-title" style={{color:"#7C3AED"}}>⚡ BRAIN DUMP</div>
-          <div style={{fontSize:13,color:"var(--ink-3)",lineHeight:1.7,marginBottom:16}}>
-            Type <strong>everything</strong> in your head right now — tasks, worries, ideas, reminders, random thoughts. Don't organise. Don't filter. Just dump it all out. AI will sort it instantly.
-          </div>
-          {!dumpResult?(
-            <>
-              <textarea value={dumpText} onChange={e=>setDumpText(e.target.value)} className="ta"
-                style={{minHeight:200,fontSize:14,lineHeight:1.8,letterSpacing:.01,fontFamily:"inherit"}}
-                placeholder="e.g. Need to call compliance team about Goldbet regs... Ultrabet reporting due Friday... Follow up accounting month-end..."
-                autoFocus/>
-              {dumpErr&&<div style={{color:"#DC2626",fontSize:12.5,marginTop:8}}>{dumpErr}</div>}
-              <div style={{display:"flex",gap:10,marginTop:14,alignItems:"center"}}>
-                <button className="btn btn-primary" style={{padding:"10px 28px",fontSize:14}} onClick={process} disabled={dumpLoading||!dumpText.trim()}>
-                  {dumpLoading?<span style={{display:"flex",alignItems:"center",gap:8}}><span className="typing-dots"><span/><span/><span/></span> Sorting...</span>:"⚡ Sort My Brain"}
-                </button>
-                {dumpText.length>0&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:"var(--ink-4)"}}>{dumpText.split(/\s+/).filter(Boolean).length} words</span>}
-              </div>
-            </>
-          ):(
-            <div>
-              {dumpResult.insights&&<div style={{background:"rgba(79,70,229,.08)",border:"1px solid rgba(79,70,229,.2)",borderRadius:10,padding:"12px 16px",marginBottom:16}}>
-                <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"var(--indigo)",letterSpacing:1.5,marginBottom:5,textTransform:"uppercase"}}>◎ WHAT THIS REVEALS</div>
-                <div style={{fontSize:13,color:"var(--ink-2)",lineHeight:1.7}}>{dumpResult.insights}</div>
-              </div>}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
-                {[{label:"TASKS",items:dumpResult.tasks||[],icon:"✓",color:"#2563EB",render:t=><div key={t.title} style={{fontSize:12,padding:"8px 10px",background:"var(--surface)",borderRadius:7,marginBottom:5}}><div style={{fontWeight:500,color:"var(--ink)",marginBottom:3}}>{t.title}</div><div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{t.brand&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:BRANDS.find(b=>b.id===t.brand)?.color||"var(--ink-4)"}}>{BRANDS.find(b=>b.id===t.brand)?.emoji} {t.brand}</span>}<span className={`badge ${t.priority==="urgent"?"badge-violet":t.priority==="high"?"badge-red":"badge-amber"}`}>{t.priority}</span></div></div>},
-                 {label:"REMINDERS",items:dumpResult.reminders||[],icon:"🔔",color:"#7C3AED",render:r=><div key={r.title} style={{fontSize:12,padding:"8px 10px",background:"var(--surface)",borderRadius:7,marginBottom:5}}><div style={{fontWeight:500,color:"var(--ink)",marginBottom:2}}>{r.title}</div><div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--ink-4)"}}>{r.date} {r.time}</div></div>},
-                 {label:"NOTES",items:dumpResult.notes||[],icon:"📌",color:"#D97706",render:n=><div key={n.title} style={{fontSize:12,padding:"8px 10px",background:"var(--surface)",borderRadius:7,marginBottom:5}}><div style={{fontWeight:500,color:"var(--ink)",marginBottom:2}}>{n.title||"Note"}</div><div style={{fontSize:11,color:"var(--ink-4)",lineHeight:1.5}}>{n.content?.slice(0,80)}</div></div>}
-                ].map(col=>(
-                  <div key={col.label}>
-                    <div style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:col.color,letterSpacing:1.5,marginBottom:8,textTransform:"uppercase"}}>{col.icon} {col.label} ({col.items.length})</div>
-                    {col.items.map(col.render)}
-                    {!col.items.length&&<div style={{fontSize:11,color:"var(--ink-4)",padding:"8px 0"}}>None found</div>}
-                  </div>
-                ))}
-              </div>
-              <div className="row gap8">
-                <button className="btn btn-primary" style={{padding:"10px 28px"}} onClick={applyAll}>✓ Add Everything to PRODASH</button>
-                <button className="btn btn-ghost" onClick={()=>setDumpResult(null)}>← Edit</button>
-                <button className="btn btn-ghost" onClick={()=>{setDumpText("");setDumpResult(null);}}>Start Over</button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
+  const renderJournal=()=><JournalView data={data} saveJournalEntry={saveJournalEntry} showToast={showToast}/>;
 
-  // ══════════════════════════════════════════════════════════
-  //  WORK JOURNAL
-  // ══════════════════════════════════════════════════════════
-  const renderJournal=()=>{
-    const today=todayStr();
-    const [selDate,setSelDate]=useState(today);
-    const entry=data.journal?.[selDate]||{};
-    const [f,setF]=useState({worked:entry.worked||"",mattered:entry.mattered||"",mind:entry.mind||"",tomorrow:entry.tomorrow||""});
-    const [saved,setSaved]=useState(false);
-    const save=()=>{saveJournalEntry(selDate,f);setSaved(true);setTimeout(()=>setSaved(false),2000);showToast("Journal saved");};
-    const allEntries=Object.entries(data.journal||{}).sort((a,b)=>b[0].localeCompare(a[0]));
-    const todayLog=(data.timelog||[]).filter(l=>l.ts?.startsWith(today)&&l.type!=="session_start").slice(0,8);
-    return(
-      <div className="anim-up">
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
-          <div><div className="section-title" style={{marginBottom:4}}>📖 WORK JOURNAL</div><div style={{fontSize:12,color:"var(--ink-4)"}}>Your private daily record. {allEntries.length} entries so far.</div></div>
-          <input type="date" className="inp" style={{width:160}} value={selDate} onChange={e=>{setSelDate(e.target.value);const ent=data.journal?.[e.target.value]||{};setF({worked:ent.worked||"",mattered:ent.mattered||"",mind:ent.mind||"",tomorrow:ent.tomorrow||""}); setSaved(false);}}/>
-        </div>
-        <div className="g2 gap14">
-          <div>
-            {selDate===today&&todayLog.length>0&&<div className="card mb14">
-              <div className="card-header"><span className="card-title">TODAY'S ACTIVITY (auto)</span></div>
-              {todayLog.map(l=><div key={l.id} style={{fontSize:12,color:"var(--ink-3)",padding:"5px 0",borderBottom:"1px solid var(--surface)"}}>{fmtTime(l.ts)} — {l.title}</div>)}
-            </div>}
-            {[{k:"worked",l:"What did you actually work on?",p:"Tasks completed, meetings, calls, research..."},
-              {k:"mattered",l:"What mattered most today?",p:"The one thing that moved the needle..."},
-              {k:"mind",l:"What's in your head right now?",p:"Worries, unfinished thoughts, things you're carrying..."},
-              {k:"tomorrow",l:"Tomorrow's single most important thing",p:"Just one. What would make tomorrow a success?"},
-            ].map(q=>(
-              <div className="form-group mb14" key={q.k}>
-                <label className="form-label" style={{fontSize:12.5,marginBottom:6}}>{q.l}</label>
-                <textarea className="ta" style={{minHeight:72,fontSize:13}} placeholder={q.p}
-                  value={f[q.k]} onChange={e=>setF(p=>({...p,[q.k]:e.target.value}))}/>
-              </div>
-            ))}
-            <button className="btn btn-primary" style={{padding:"10px 24px"}} onClick={save}>
-              {saved?"✓ Saved!":"💾 Save Entry"}
-            </button>
-          </div>
-          <div>
-            <div className="card">
-              <div className="card-header"><span className="card-title">PAST ENTRIES</span></div>
-              {!allEntries.length&&<div style={{fontSize:12,color:"var(--ink-4)",padding:"12px 0",textAlign:"center"}}>No entries yet — start today</div>}
-              {allEntries.slice(0,15).map(([date,ent])=>(
-                <div key={date} onClick={()=>{setSelDate(date);setF({worked:ent.worked||"",mattered:ent.mattered||"",mind:ent.mind||"",tomorrow:ent.tomorrow||""});setSaved(false);}}
-                  style={{padding:"10px 0",borderBottom:"1px solid var(--surface)",cursor:"pointer",transition:"opacity .1s"}} onMouseEnter={e=>e.currentTarget.style.opacity=".7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-                    <span style={{fontFamily:"Martian Mono,monospace",fontSize:10,fontWeight:600,color:date===today?"#2563EB":"var(--ink-3)"}}>{date===today?"TODAY":fmtDate(date)}</span>
-                    <span style={{fontSize:10,color:"var(--ink-4)"}}>{[ent.worked,ent.mattered,ent.mind,ent.tomorrow].filter(Boolean).length}/4 filled</span>
-                  </div>
-                  {ent.mattered&&<div style={{fontSize:11.5,color:"var(--ink-3)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ent.mattered}</div>}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const renderGoals=()=><GoalsView data={data} addGoal={addGoal} updateGoalProgress={updateGoalProgress} deleteGoal={deleteGoal} showToast={showToast} fetchInsight={fetchInsight} insightLoading={insightLoading} insights={insights}/>;
 
-  // ══════════════════════════════════════════════════════════
-  //  GOALS / OKRs
-  // ══════════════════════════════════════════════════════════
-  const renderGoals=()=>{
-    const [showAdd,setShowAdd]=useState(false);
-    const [f,setF]=useState({title:"",description:"",targetDate:"",brand:"",category:"",targetValue:"",unit:""});
-    const goals=data.goals||[];
-    const active=goals.filter(g=>!g.done);const done=goals.filter(g=>g.done);
-    return(
-      <div className="anim-up">
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
-          <div><div className="section-title" style={{marginBottom:4}}>🎯 GOALS</div><div style={{fontSize:12,color:"var(--ink-4)"}}>{active.length} active · {done.length} achieved</div></div>
-          <div className="row gap8">
-            <button className="ai-btn" disabled={insightLoading["goals"]} onClick={()=>fetchInsight("goals","Review my goals vs my current task/time data. Am I working on the right things? 3 specific insights.")}>◎ AI Review</button>
-            <button className="btn btn-primary btn-sm" onClick={()=>setShowAdd(p=>!p)}>+ New Goal</button>
-          </div>
-        </div>
-        {insights["goals"]&&<AIPanel insight={insights["goals"]} loading={false} label="◎ AI GOAL REVIEW"/>}
-        {showAdd&&(
-          <div className="card mb16" style={{borderColor:"rgba(37,99,235,.3)",background:"rgba(37,99,235,.03)"}}>
-            <div className="card-header"><span className="card-title">NEW GOAL</span><button className="modal-close" onClick={()=>setShowAdd(false)}>✕</button></div>
-            <div className="form-group mb10"><label className="form-label">Goal Title *</label><input className="inp" placeholder="e.g. Get all brands to A health grade by June" value={f.title} onChange={e=>setF(p=>({...p,title:e.target.value}))} autoFocus/></div>
-            <div className="form-row mb10">
-              <div className="form-group"><label className="form-label">Target Date</label><input className="inp" type="date" value={f.targetDate} onChange={e=>setF(p=>({...p,targetDate:e.target.value}))}/></div>
-              <div className="form-group"><label className="form-label">Brand (optional)</label>
-                <select className="sel" value={f.brand} onChange={e=>setF(p=>({...p,brand:e.target.value}))}><option value="">— All brands —</option>{BRANDS.map(b=><option key={b.id} value={b.id}>{b.emoji} {b.name}</option>)}</select>
-              </div>
-            </div>
-            <div className="form-group mb10"><label className="form-label">Description / Why this matters</label><textarea className="ta" style={{minHeight:60}} value={f.description} onChange={e=>setF(p=>({...p,description:e.target.value}))}/></div>
-            <div className="row gap8"><button className="btn btn-primary btn-sm" onClick={()=>{addGoal(f);setShowAdd(false);setF({title:"",description:"",targetDate:"",brand:"",category:"",targetValue:"",unit:""});}}>Add Goal</button><button className="btn btn-ghost btn-sm" onClick={()=>setShowAdd(false)}>Cancel</button></div>
-          </div>
-        )}
-        {!goals.length&&<div className="empty-state"><div className="empty-icon">🎯</div><div className="empty-title">No goals yet</div><div className="empty-desc">Set a goal to give your tasks meaning and direction</div></div>}
-        {active.map(g=>{
-          const brand=BRANDS.find(b=>b.id===g.brand);const daysLeft=g.targetDate?Math.ceil((new Date(g.targetDate)-new Date())/86400000):null;
-          return(
-            <div key={g.id} className="card mb10" style={{borderLeft:`3px solid ${brand?.color||"#2563EB"}`}}>
-              <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:14,fontWeight:600,color:"var(--ink)",marginBottom:6}}>{g.title}</div>
-                  {g.description&&<div style={{fontSize:12.5,color:"var(--ink-3)",marginBottom:8,lineHeight:1.6}}>{g.description}</div>}
-                  <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:10}}>
-                    {brand&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:brand.color}}>{brand.emoji} {brand.name}</span>}
-                    {daysLeft!==null&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:daysLeft<7?"#DC2626":daysLeft<30?"#D97706":"var(--ink-4)"}}>📅 {daysLeft>0?daysLeft+"d left":"Overdue"}</span>}
-                  </div>
-                  <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <div style={{flex:1,height:6,background:"var(--surface)",borderRadius:99,overflow:"hidden"}}>
-                      <div style={{height:"100%",width:g.progress+"%",background:brand?.color||"#2563EB",borderRadius:99,transition:"width .5s"}}/>
-                    </div>
-                    <span style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:"var(--ink-3)",width:30}}>{g.progress}%</span>
-                    <input type="range" min={0} max={100} value={g.progress} onChange={e=>updateGoalProgress(g.id,+e.target.value,+e.target.value===100)} style={{width:80}}/>
-                  </div>
-                </div>
-                <div style={{display:"flex",gap:5}}>
-                  <button className="btn btn-primary btn-xs" onClick={()=>updateGoalProgress(g.id,100,true)}>✓ Done</button>
-                  <button className="task-del" style={{opacity:1}} onClick={()=>deleteGoal(g.id)}>✕</button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-        {done.length>0&&<div>
-          <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"#059669",letterSpacing:2,margin:"16px 0 10px",textTransform:"uppercase"}}>✓ ACHIEVED ({done.length})</div>
-          {done.map(g=><div key={g.id} style={{display:"flex",gap:10,padding:"10px 14px",border:"1px solid var(--line)",borderRadius:8,marginBottom:6,opacity:.6}}>
-            <span style={{fontSize:16}}>🏆</span><div style={{flex:1}}><div style={{fontSize:13,fontWeight:500,color:"var(--ink)",textDecoration:"line-through"}}>{g.title}</div><div style={{fontSize:10.5,color:"var(--ink-4)",marginTop:2}}>Achieved {fmtDate(g.doneAt)}</div></div>
-            <button className="task-del" style={{opacity:1}} onClick={()=>deleteGoal(g.id)}>✕</button>
-          </div>)}
-        </div>}
-      </div>
-    );
-  };
+  const renderDecisions=()=><DecisionsView data={data} addDecision={addDecision} deleteDecision={deleteDecision} showToast={showToast} fetchInsight={fetchInsight} insightLoading={insightLoading} insights={insights}/>;
 
-  // ══════════════════════════════════════════════════════════
-  //  DECISION LOG
-  // ══════════════════════════════════════════════════════════
-  const renderDecisions=()=>{
-    const [showAdd,setShowAdd]=useState(false);
-    const [f,setF]=useState({title:"",context:"",decision:"",reasoning:"",brand:""});
-    const decisions=data.decisions||[];
-    return(
-      <div className="anim-up">
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
-          <div><div className="section-title" style={{marginBottom:4}}>⚖ DECISION LOG</div><div style={{fontSize:12,color:"var(--ink-4)"}}>{decisions.length} decisions recorded</div></div>
-          <div className="row gap8">
-            <button className="ai-btn" disabled={insightLoading["decisions"]} onClick={()=>fetchInsight("decisions","Analyse my decision patterns. What do I tend to decide? Any recurring themes or risks? 2-3 insights.")}>◎ AI Patterns</button>
-            <button className="btn btn-primary btn-sm" onClick={()=>setShowAdd(p=>!p)}>+ Log Decision</button>
-          </div>
-        </div>
-        {insights["decisions"]&&<AIPanel insight={insights["decisions"]} loading={false} label="◎ DECISION PATTERNS"/>}
-        {showAdd&&(
-          <div className="card mb16" style={{borderColor:"rgba(124,58,237,.3)"}}>
-            <div className="card-header"><span className="card-title">LOG A DECISION</span><button className="modal-close" onClick={()=>setShowAdd(false)}>✕</button></div>
-            <div className="form-group mb10"><label className="form-label">Decision Title *</label><input className="inp" placeholder="e.g. Delayed Goldbet compliance audit until Q3" value={f.title} onChange={e=>setF(p=>({...p,title:e.target.value}))} autoFocus/></div>
-            <div className="form-row mb10">
-              <div className="form-group"><label className="form-label">Brand</label>
-                <select className="sel" value={f.brand} onChange={e=>setF(p=>({...p,brand:e.target.value}))}><option value="">— General —</option>{BRANDS.map(b=><option key={b.id} value={b.id}>{b.emoji} {b.name}</option>)}</select>
-              </div>
-            </div>
-            <div className="form-group mb10"><label className="form-label">Context — what situation led to this?</label><textarea className="ta" style={{minHeight:60}} placeholder="What was happening? What were the options?" value={f.context} onChange={e=>setF(p=>({...p,context:e.target.value}))}/></div>
-            <div className="form-group mb10"><label className="form-label">The decision made</label><textarea className="ta" style={{minHeight:48}} placeholder="Exactly what was decided..." value={f.decision} onChange={e=>setF(p=>({...p,decision:e.target.value}))}/></div>
-            <div className="form-group mb14"><label className="form-label">Reasoning — why this choice?</label><textarea className="ta" style={{minHeight:60}} placeholder="Why was this the right call?" value={f.reasoning} onChange={e=>setF(p=>({...p,reasoning:e.target.value}))}/></div>
-            <div className="row gap8"><button className="btn btn-primary btn-sm" onClick={()=>{addDecision(f);setShowAdd(false);setF({title:"",context:"",decision:"",reasoning:"",brand:""});}}>Log Decision</button><button className="btn btn-ghost btn-sm" onClick={()=>setShowAdd(false)}>Cancel</button></div>
-          </div>
-        )}
-        {!decisions.length&&<div className="empty-state"><div className="empty-icon">⚖</div><div className="empty-title">No decisions logged</div><div className="empty-desc">Start recording important decisions. In 6 months you'll see clear patterns in your thinking.</div></div>}
-        {decisions.map(d=>{const brand=BRANDS.find(b=>b.id===d.brand);return(
-          <div key={d.id} className="card mb10">
-            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-              <div style={{flex:1}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                  <div style={{fontSize:14,fontWeight:600,color:"var(--ink)"}}>{d.title}</div>
-                  {brand&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:brand.color}}>{brand.emoji} {brand.name}</span>}
-                </div>
-                {d.context&&<div style={{marginBottom:8}}><span className="form-label">CONTEXT</span><div style={{fontSize:12.5,color:"var(--ink-3)",lineHeight:1.6,marginTop:2}}>{d.context}</div></div>}
-                {d.decision&&<div style={{marginBottom:8,background:"rgba(37,99,235,.06)",borderRadius:7,padding:"8px 12px"}}><span className="form-label">DECISION</span><div style={{fontSize:12.5,color:"var(--ink-2)",lineHeight:1.6,marginTop:2,fontWeight:500}}>{d.decision}</div></div>}
-                {d.reasoning&&<div><span className="form-label">REASONING</span><div style={{fontSize:12.5,color:"var(--ink-3)",lineHeight:1.6,marginTop:2}}>{d.reasoning}</div></div>}
-                <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--ink-4)",marginTop:8}}>{fmtDateTime(d.createdAt)}</div>
-              </div>
-              <button className="task-del" style={{opacity:1}} onClick={()=>deleteDecision(d.id)}>✕</button>
-            </div>
-          </div>
-        );})}
-      </div>
-    );
-  };
-
-  // ══════════════════════════════════════════════════════════
-  //  WEEKLY PLAN
-  // ══════════════════════════════════════════════════════════
-  const renderWeekPlan=()=>{
-    const today=todayStr();const weekNum=Math.floor(Date.now()/604800000);
-    const thisWeek=weeklyReviews.find(w=>w.week===weekNum)||{};
-    const [rating,setRating]=useState(thisWeek.rating||0);
-    const [reflection,setReflection]=useState(thisWeek.reflection||"");
-    const [nextWeek,setNextWeek]=useState(thisWeek.nextWeek||"");
-    const allTasks=Object.values(data.tasks).flat();
-    const weekAgo=new Date(Date.now()-7*86400000).toISOString().split("T")[0];
-    const weekDone=allTasks.filter(t=>t.done&&t.doneAt>=weekAgo);
-    const upcoming=data.reminders.filter(r=>r.date>=today).slice(0,6);
-    const dueSoon=allTasks.filter(t=>!t.done&&t.due&&t.due>=today&&t.due<=new Date(Date.now()+7*86400000).toISOString().split("T")[0]).sort((a,b)=>a.due.localeCompare(b.due));
-    const stale=allTasks.filter(t=>!t.done&&taskAgeDays(t.createdAt)>14).slice(0,5);
-    const taskDebt=allTasks.filter(t=>!t.done&&taskAgeDays(t.createdAt)>14);
-    const debtHours=taskDebt.reduce((s,t)=>s+(t.estimatedMins||30),0)/60;
-    const saveReview=()=>{const r={week:weekNum,date:today,rating,reflection,nextWeek};const upd=[...weeklyReviews.filter(w=>w.week!==weekNum),r];setWeeklyReviews(upd);saveWeekly(upd);showToast("Weekly review saved");};
-    return(
-      <div className="anim-up">
-        <div className="section-title" style={{marginBottom:4}}>📅 WEEKLY PLAN</div>
-        <div style={{fontSize:12,color:"var(--ink-4)",marginBottom:20}}>Plan your week, track your commitment, review your performance.</div>
-
-        {/* Task debt */}
-        {taskDebt.length>0&&<div style={{background:"rgba(220,38,38,.06)",border:"1px solid rgba(220,38,38,.2)",borderRadius:12,padding:"14px 18px",marginBottom:16}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
-            <span style={{fontSize:18}}>💳</span>
-            <div style={{fontFamily:"Martian Mono,monospace",fontSize:12,fontWeight:700,color:"#DC2626"}}>TASK DEBT: {taskDebt.length} tasks ({debtHours.toFixed(1)} hours owed)</div>
-          </div>
-          <div style={{fontSize:12.5,color:"var(--ink-3)",marginBottom:10}}>These tasks have been pending for 14+ days. They are debt accumulating against your productivity.</div>
-          {stale.map(t=>{const[bId,tab]=t.key?.split("_")||[];const brand=BRANDS.find(b=>b.id===bId);return(
-            <div key={t.id} style={{display:"flex",gap:10,padding:"7px 0",borderBottom:"1px solid rgba(220,38,38,.1)",alignItems:"center"}}>
-              <div style={{flex:1}}><div style={{fontSize:12.5,fontWeight:500,color:"var(--ink)"}}>{t.title}</div><div style={{fontSize:10.5,color:"var(--ink-4)"}}>{brand?.emoji} {brand?.name} · {Math.floor(taskAgeDays(t.createdAt))}d old</div></div>
-              <button className="btn btn-ghost btn-xs" onClick={()=>{setActiveBrand(bId);setBrandTab(tab);setView("brand");}}>View</button>
-            </div>
-          );})}
-          {taskDebt.length>5&&<div style={{fontSize:11,color:"rgba(220,38,38,.6)",marginTop:6}}>+{taskDebt.length-5} more in task debt</div>}
-        </div>}
-
-        {/* Accountability */}
-        <div className="card mb14">
-          <div className="card-header"><span className="card-title">🤝 WEEKLY COMMITMENT</span></div>
-          {acctData.lastWeekCommit>0&&<div style={{padding:"10px 0",borderBottom:"1px solid var(--surface)",marginBottom:12}}>
-            <div style={{fontSize:12.5,color:"var(--ink-3)"}}>Last week you committed to <strong>{acctData.lastWeekCommit}</strong> tasks. You completed <strong>{acctData.lastWeekDone}</strong>.</div>
-            <div style={{display:"flex",alignItems:"center",gap:10,marginTop:8}}>
-              <div style={{flex:1,height:6,background:"var(--surface)",borderRadius:99}}>
-                <div style={{height:"100%",width:Math.min(100,acctData.lastWeekPct)+"%",background:acctData.lastWeekPct>=100?"#059669":acctData.lastWeekPct>=70?"#D97706":"#DC2626",borderRadius:99}}/>
-              </div>
-              <span style={{fontFamily:"Martian Mono,monospace",fontSize:11,fontWeight:600,color:acctData.lastWeekPct>=100?"#059669":acctData.lastWeekPct>=70?"#D97706":"#DC2626"}}>{acctData.lastWeekPct}% follow-through</span>
-            </div>
-          </div>}
-          <div style={{fontSize:12.5,color:"var(--ink-3)",marginBottom:10}}>This week I commit to completing <strong>{acctData.commitment||"?"}</strong> tasks.</div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            {[5,10,15,20,25,30].map(n=><button key={n} className={`btn btn-xs ${acctData.commitment===n?"btn-primary":"btn-ghost"}`} onClick={()=>setCommitment(n)}>{n}</button>)}
-          </div>
-          {acctData.commitment>0&&<div style={{marginTop:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}><span style={{fontSize:12,color:"var(--ink-3)"}}>Progress this week</span><span style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:"#2563EB"}}>{stats.weekDone}/{acctData.commitment}</span></div>
-            <div style={{height:8,background:"var(--surface)",borderRadius:99,overflow:"hidden"}}>
-              <div style={{height:"100%",width:Math.min(100,Math.round(stats.weekDone/acctData.commitment*100))+"%",background:"#2563EB",borderRadius:99,transition:"width .5s"}}/>
-            </div>
-          </div>}
-        </div>
-
-        <div className="g2 gap14 mb14">
-          {/* Due this week */}
-          <div className="card">
-            <div className="card-header"><span className="card-title">DUE THIS WEEK ({dueSoon.length})</span></div>
-            {!dueSoon.length&&<div style={{fontSize:12,color:"var(--ink-4)",padding:"8px 0"}}>Nothing due this week</div>}
-            {dueSoon.map(t=>{const[bId,tab]=t.key?.split("_")||[];const brand=BRANDS.find(b=>b.id===bId);return(
-              <div key={t.id} style={{display:"flex",gap:8,padding:"8px 0",borderBottom:"1px solid var(--surface)",alignItems:"center"}}>
-                <div style={{flex:1}}><div style={{fontSize:12.5,fontWeight:500,color:"var(--ink)"}}>{t.title}</div><div style={{fontSize:10.5,color:"var(--ink-4)",marginTop:2}}>{brand?.emoji} {brand?.name} · Due {fmtDate(t.due)}</div></div>
-                <span className={`badge ${t.priority==="urgent"?"badge-violet":t.priority==="high"?"badge-red":"badge-amber"}`}>{t.priority}</span>
-              </div>
-            );})}
-          </div>
-          {/* Upcoming reminders */}
-          <div className="card">
-            <div className="card-header"><span className="card-title">UPCOMING REMINDERS</span></div>
-            {!upcoming.length&&<div style={{fontSize:12,color:"var(--ink-4)",padding:"8px 0"}}>No upcoming reminders</div>}
-            {upcoming.map(r=>{const brand=BRANDS.find(b=>b.id===r.brand);return(
-              <div key={r.id} style={{display:"flex",gap:8,padding:"8px 0",borderBottom:"1px solid var(--surface)",alignItems:"center"}}>
-                <span style={{fontSize:14}}>🔔</span>
-                <div style={{flex:1}}><div style={{fontSize:12.5,fontWeight:500}}>{r.title}</div><div style={{fontSize:10.5,color:"var(--ink-4)",marginTop:2}}>{fmtDate(r.date)}{brand?` · ${brand.emoji} ${brand.name}`:""}</div></div>
-              </div>
-            );})}
-          </div>
-        </div>
-
-        {/* Weekly review */}
-        <div className="card">
-          <div className="card-header"><span className="card-title">THIS WEEK'S REVIEW</span><span style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--ink-4)"}}>{weekDone.length} tasks completed</span></div>
-          <div style={{marginBottom:14}}>
-            <div className="form-label" style={{marginBottom:8}}>Rate your week</div>
-            <div style={{display:"flex",gap:8}}>
-              {[1,2,3,4,5].map(n=><button key={n} onClick={()=>setRating(n)} style={{width:40,height:40,borderRadius:8,border:`2px solid ${rating>=n?"#F59E0B":"var(--line)"}`,background:rating>=n?"rgba(245,158,11,.1)":"transparent",fontSize:18,cursor:"pointer"}}>{"⭐"}</button>)}
-              {rating>0&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:"#F59E0B",alignSelf:"center",marginLeft:4}}>{["","POOR","BELOW AVERAGE","AVERAGE","GOOD","EXCELLENT"][rating]}</span>}
-            </div>
-          </div>
-          <div className="form-group mb10"><label className="form-label">What worked, what didn't?</label><textarea className="ta" style={{minHeight:72}} value={reflection} onChange={e=>setReflection(e.target.value)} placeholder="Wins, misses, surprises..."/></div>
-          <div className="form-group mb14"><label className="form-label">What will I do differently next week?</label><textarea className="ta" style={{minHeight:60}} value={nextWeek} onChange={e=>setNextWeek(e.target.value)} placeholder="One specific change..."/></div>
-          <div style={{display:"flex",gap:10,alignItems:"center"}}>
-            <button className="btn btn-primary btn-sm" onClick={saveReview}>💾 Save Review</button>
-            {weeklyReviews.length>0&&<span style={{fontSize:12,color:"var(--ink-4)"}}>{weeklyReviews.length} past reviews saved</span>}
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const renderWeekPlan=()=><WeekPlanView data={data} stats={stats} bStats={bStats} acctData={acctData} setCommitment={setCommitment} weeklyReviews={weeklyReviews} setWeeklyReviews={setWeeklyReviews} showToast={showToast} setActiveBrand={setActiveBrand} setBrandTab={setBrandTab} setView={setView}/>;
 
   const renderAI=()=>(
     <div className="anim-up">
