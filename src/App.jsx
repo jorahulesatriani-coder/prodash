@@ -4,1230 +4,916 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid, Legend
 } from "recharts";
 
-// ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════
 //  CONSTANTS
-// ══════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════
 const BRANDS = [
-  { id: "goldbet",  name: "Goldbet",  color: "#D97706", bg: "#FFFBEB", emoji: "🥇" },
-  { id: "ultrabet", name: "Ultrabet", color: "#7C3AED", bg: "#F5F3FF", emoji: "⚡" },
-  { id: "boostbet", name: "BoostBet", color: "#DC2626", bg: "#FEF2F2", emoji: "🚀" },
-  { id: "allbets",  name: "AllBets",  color: "#059669", bg: "#ECFDF5", emoji: "🎯" },
-  { id: "betgold",  name: "BetGold",  color: "#EA580C", bg: "#FFF7ED", emoji: "💰" },
-  { id: "techdev",  name: "TechDev",  color: "#2563EB", bg: "#EFF6FF", emoji: "💻" },
+  { id:"goldbet",  name:"Goldbet",  color:"#B45309", bg:"#FFFBEB", emoji:"🥇" },
+  { id:"ultrabet", name:"Ultrabet", color:"#6D28D9", bg:"#F5F3FF", emoji:"⚡" },
+  { id:"boostbet", name:"BoostBet", color:"#B91C1C", bg:"#FEF2F2", emoji:"🚀" },
+  { id:"allbets",  name:"AllBets",  color:"#065F46", bg:"#ECFDF5", emoji:"🎯" },
+  { id:"betgold",  name:"BetGold",  color:"#C2410C", bg:"#FFF7ED", emoji:"💰" },
+  { id:"techdev",  name:"TechDev",  color:"#1E40AF", bg:"#EFF6FF", emoji:"💻" },
 ];
-
-const BRAND_TABS = ["Reporting", "Compliance", "Accounting"];
-
+const BRAND_TABS = ["Reporting","Compliance","Accounting"];
 const PRIORITIES = [
-  { key: "low",    label: "Low",    cls: "p-low",    dot: "pd-low" },
-  { key: "medium", label: "Medium", cls: "p-medium", dot: "pd-medium" },
-  { key: "high",   label: "High",   cls: "p-high",   dot: "pd-high" },
-  { key: "urgent", label: "Urgent", cls: "p-urgent", dot: "pd-urgent" },
+  {key:"low",label:"Low",cls:"p-low",dot:"pd-low"},
+  {key:"medium",label:"Medium",cls:"p-medium",dot:"pd-medium"},
+  {key:"high",label:"High",cls:"p-high",dot:"pd-high"},
+  {key:"urgent",label:"Urgent",cls:"p-urgent",dot:"pd-urgent"},
 ];
-
-const PIN_COLORS = [
-  "#FFF9C4", "#FFEEBA", "#FFE0E0", "#E0F4E0", "#E0E8FF",
-  "#F3E8FF", "#FFF0E0", "#E0F8F8"
-];
-
-const MONTHS = [
-  "January","February","March","April","May","June",
-  "July","August","September","October","November","December"
-];
+const CATEGORIES = ["Strategy","Operations","Compliance","Finance","Marketing","Tech","Admin","Meeting","Review","Other"];
+const PIN_COLORS = ["#FFF9C4","#FFEEBA","#FFE0E0","#E0F4E0","#E0E8FF","#F3E8FF","#FFF0E0","#E0F8F8"];
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const WEEKDAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-
-const STORAGE_KEY = "prodash_data_v2";
-
+const STORAGE_KEY = "prodash_v4";
 const NAV_ITEMS = [
-  { id: "dashboard", icon: "🏠", label: "Dashboard" },
-  { id: "analytics", icon: "📊", label: "Analytics" },
-  { id: "calendar",  icon: "📅", label: "Calendar" },
-  { id: "pinboard",  icon: "📌", label: "Pin Board" },
-  { id: "ai",        icon: "🤖", label: "AI Assistant" },
+  {id:"dashboard",icon:"◈",label:"Dashboard"},
+  {id:"timelog",  icon:"◷",label:"Time Log"},
+  {id:"analytics",icon:"◉",label:"Analytics"},
+  {id:"calendar", icon:"◫",label:"Calendar"},
+  {id:"pinboard", icon:"◆",label:"Pin Board"},
+  {id:"ai",       icon:"◎",label:"AI Assistant"},
 ];
+const LOG_TYPES = {
+  task_added:    {color:"#2563EB",label:"Task Added"},
+  task_done:     {color:"#059669",label:"Completed"},
+  task_deleted:  {color:"#DC2626",label:"Deleted"},
+  note_added:    {color:"#D97706",label:"Note Added"},
+  note_deleted:  {color:"#9CA3AF",label:"Note Deleted"},
+  reminder_set:  {color:"#7C3AED",label:"Reminder Set"},
+  timer_start:   {color:"#0891B2",label:"Timer Started"},
+  timer_stop:    {color:"#059669",label:"Timer Stopped"},
+  session_start: {color:"#6B7280",label:"Session"},
+  ai_insight:    {color:"#4F46E5",label:"AI Insight"},
+};
 
-// ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════
 //  HELPERS
-// ══════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════
 const uid = () => `${Date.now()}_${Math.random().toString(36).substr(2,7)}`;
 const todayStr = () => new Date().toISOString().split("T")[0];
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" }) : "";
-const fmtTime = (d) => d ? new Date(d).toLocaleTimeString("en-GB", { hour:"2-digit", minute:"2-digit" }) : "";
-const daysSince = (d) => Math.floor((Date.now() - new Date(d)) / 86400000);
+const nowISO = () => new Date().toISOString();
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "";
+const fmtTime = (d) => d ? new Date(d).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}) : "";
+const fmtDateTime = (d) => d ? `${fmtDate(d)} ${fmtTime(d)}` : "";
+const fmtDuration = (ms) => {
+  if (!ms||ms<0) return "0m";
+  const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);
+  return h?`${h}h ${m}m`:`${m}m`;
+};
 
-const emptyData = () => ({
-  tasks: {},
-  notes: [],
-  reminders: [],
-  uploads: {},
-  meta: { createdAt: new Date().toISOString() }
-});
-
+const emptyData = () => ({tasks:{},notes:[],reminders:[],uploads:{},timelog:[],aiInsights:{},meta:{createdAt:nowISO()}});
 const loadData = () => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return emptyData();
-    const parsed = JSON.parse(raw);
-    // Ensure all fields exist (migration safety)
-    return {
-      tasks: parsed.tasks || {},
-      notes: parsed.notes || [],
-      reminders: parsed.reminders || [],
-      uploads: parsed.uploads || {},
-      meta: parsed.meta || { createdAt: new Date().toISOString() }
-    };
-  } catch {
-    return emptyData();
-  }
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw) return emptyData();
+    const p=JSON.parse(raw);
+    return {tasks:p.tasks||{},notes:p.notes||[],reminders:p.reminders||[],uploads:p.uploads||{},timelog:p.timelog||[],aiInsights:p.aiInsights||{},meta:p.meta||{createdAt:nowISO()}};
+  } catch { return emptyData(); }
 };
+const saveData = (d) => { try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));return true;}catch{return false;} };
 
-const saveData = (data) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    return true;
-  } catch (e) {
-    console.error("Storage error:", e);
-    return false;
-  }
-};
-
-// ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════
 //  TOAST HOOK
-// ══════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════
 function useToast() {
-  const [toasts, setToasts] = useState([]);
-  const show = useCallback((msg, type = "success") => {
-    const id = uid();
-    setToasts(prev => [...prev, { id, msg, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
-  }, []);
-  return { toasts, show };
+  const [toasts,setToasts]=useState([]);
+  const show=useCallback((msg,type="success")=>{
+    const id=uid();
+    setToasts(p=>[...p,{id,msg,type}]);
+    setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3500);
+  },[]);
+  return {toasts,show};
 }
 
-// ══════════════════════════════════════════════════════════
-//  SUB-COMPONENTS
-// ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════
+//  SCORE RING
+// ══════════════════════════════════════
+function ScoreRing({score,size=72,stroke=6}) {
+  const r=(size-stroke*2)/2, circ=2*Math.PI*r;
+  const dash=circ-(circ*score/100);
+  const color=score>=80?"#059669":score>=60?"#2563EB":score>=40?"#D97706":"#DC2626";
+  return (
+    <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
+      <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#E4E7F0" strokeWidth={stroke}/>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+          strokeDasharray={circ} strokeDashoffset={dash} strokeLinecap="round"
+          style={{transition:"stroke-dashoffset 1s cubic-bezier(.4,0,.2,1)"}}/>
+      </svg>
+      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Martian Mono,monospace",fontSize:size>60?16:12,fontWeight:600,color}}>{score}</div>
+    </div>
+  );
+}
 
-function ToastContainer({ toasts }) {
-  if (!toasts.length) return null;
+// ══════════════════════════════════════
+//  AI INSIGHT PANEL — used in every section
+// ══════════════════════════════════════
+function AIPanel({insight,loading,onRefresh,label="◎ AI INSIGHT",compact=false}) {
+  if (compact && !insight && !loading) return null;
+  return (
+    <div className="ai-panel" style={{marginBottom:compact?0:16}}>
+      <div className="ai-panel-title">
+        <span>{label}</span>
+        {onRefresh&&<button className="ai-btn" style={{padding:"2px 10px",fontSize:10}} onClick={onRefresh} disabled={loading}>
+          {loading?"...":"↻ Refresh"}
+        </button>}
+      </div>
+      {loading
+        ? <div className="ai-panel-loading"><span className="typing-dots"><span/><span/><span/></span> Analysing your data...</div>
+        : insight
+          ? <div className="ai-panel-text">{insight}</div>
+          : <div style={{fontSize:12,color:"#9099B8"}}>Click refresh to get an AI insight for this section.</div>
+      }
+    </div>
+  );
+}
+
+// ══════════════════════════════════════
+//  TOAST CONTAINER
+// ══════════════════════════════════════
+function ToastContainer({toasts}) {
+  if(!toasts.length) return null;
   return (
     <div className="toast-wrap">
-      {toasts.map(t => (
+      {toasts.map(t=>(
         <div key={t.id} className={`toast ${t.type}`}>
-          {t.type === "success" && "✓"} {t.type === "error" && "✕"} {t.type === "warning" && "⚠"} {t.msg}
+          {t.type==="success"?"✓":t.type==="error"?"✕":"⚠"} {t.msg}
         </div>
       ))}
     </div>
   );
 }
 
-function ProgressBar({ pct, color }) {
+// ══════════════════════════════════════
+//  TASK MODAL
+// ══════════════════════════════════════
+function TaskModal({onSave,onClose,brandId,tab,brands}) {
+  const [f,setF]=useState({title:"",priority:"medium",due:"",category:"",estimatedMins:"",note:"",brand:brandId||"",tab:tab||BRAND_TABS[0]});
+  const [err,setErr]=useState("");
+  const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  const save=()=>{ if(!f.title.trim()){setErr("Title is required");return;} onSave({...f,title:f.title.trim(),estimatedMins:f.estimatedMins?parseInt(f.estimatedMins):null}); onClose(); };
   return (
-    <div className="prog-track">
-      <div className="prog-fill" style={{ width: `${Math.min(pct, 100)}%`, background: color || "var(--blue)" }} />
-    </div>
-  );
-}
-
-// ── Task ──
-function TaskItem({ task, onToggle, onDelete }) {
-  const done = task.status === "done";
-  const pri = PRIORITIES.find(p => p.key === task.priority) || PRIORITIES[1];
-  return (
-    <div className={`task-item${done ? " done" : ""}`}>
-      <div className={`task-cb${done ? " chk" : ""}`} onClick={onToggle} title={done ? "Mark pending" : "Mark done"}>
-        {done && "✓"}
-      </div>
-      <div className="col flex1 mw0">
-        <div className={`task-title${done ? " done" : ""}`}>{task.title}</div>
-        <div className="task-meta">
-          <div className={`priority-dot ${pri.dot}`} />
-          <span className={`badge ${pri.cls}`}>{pri.label}</span>
-          {task.dueDate && (
-            <span className="text-xs text-mono text-muted">
-              📅 {fmtDate(task.dueDate)}
-              {!done && daysSince(task.dueDate) > 0 && (
-                <span style={{ color: "var(--red)", marginLeft: 3 }}>
-                  ({daysSince(task.dueDate)}d overdue)
-                </span>
-              )}
-            </span>
-          )}
-          {done && task.completedAt && (
-            <span className="text-xs text-mono" style={{ color: "var(--green)" }}>
-              ✓ {fmtDate(task.completedAt)}
-            </span>
-          )}
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal-box">
+        <div className="modal-title"><span>ADD TASK</span><button className="modal-close" onClick={onClose}>✕</button></div>
+        {err&&<div className="badge badge-red mb12" style={{display:"block",padding:"7px 10px",borderRadius:6}}>{err}</div>}
+        <div className="form-group mb12">
+          <label className="form-label">Task Title *</label>
+          <input className="inp" placeholder="What needs to be done?" value={f.title} onChange={e=>set("title",e.target.value)} autoFocus onKeyDown={e=>e.key==="Enter"&&save()}/>
         </div>
-        {task.notes && <div className="task-note">{task.notes}</div>}
-      </div>
-      <button className="task-del" onClick={onDelete} title="Delete task">✕</button>
-    </div>
-  );
-}
-
-// ── Add Task Modal ──
-function AddTaskModal({ onClose, onAdd, brandName, tabName }) {
-  const [form, setForm] = useState({ title: "", priority: "medium", dueDate: "", notes: "" });
-  const [err, setErr] = useState("");
-
-  const handleSubmit = () => {
-    if (!form.title.trim()) { setErr("Task title is required."); return; }
-    onAdd(form);
-    onClose();
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <div className="modal-title">
-          <span>➕ New Task</span>
-          <button className="modal-close" onClick={onClose}>✕</button>
-        </div>
-        <div style={{ marginBottom: 16, padding: "8px 12px", background: "var(--bg-active)", borderRadius: "var(--r-sm)", fontSize: 12.5, color: "var(--blue)", fontWeight: 600 }}>
-          {brandName} → {tabName}
-        </div>
-        <div className="col gap12">
-          <div className="form-group">
-            <label className="form-label">Task Title *</label>
-            <input
-              className="inp"
-              value={form.title}
-              onChange={e => { setForm({...form, title: e.target.value}); setErr(""); }}
-              placeholder="Describe the task clearly..."
-              onKeyDown={e => e.key === "Enter" && handleSubmit()}
-              autoFocus
-            />
-            {err && <span className="text-xs" style={{ color: "var(--red)" }}>{err}</span>}
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Priority</label>
-              <select className="sel" value={form.priority} onChange={e => setForm({...form, priority: e.target.value})}>
-                {PRIORITIES.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Due Date</label>
-              <input className="inp" type="date" value={form.dueDate} onChange={e => setForm({...form, dueDate: e.target.value})} />
-            </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Notes <span className="font-bold" style={{ color: "var(--text-4)", fontWeight: 400 }}>(optional)</span></label>
-            <textarea className="ta" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} placeholder="Any extra context or details..." rows={3} />
-          </div>
-          <div className="row gap8">
-            <button className="btn btn-ghost flex1" onClick={onClose}>Cancel</button>
-            <button className="btn btn-primary flex1" onClick={handleSubmit}>Add Task</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Add Note Modal ──
-function AddNoteModal({ onClose, onAdd }) {
-  const [form, setForm] = useState({ title: "", content: "", color: PIN_COLORS[0] });
-  const [err, setErr] = useState("");
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <div className="modal-title">
-          <span>📌 New Pin</span>
-          <button className="modal-close" onClick={onClose}>✕</button>
-        </div>
-        <div className="col gap12">
-          <div className="form-group">
-            <label className="form-label">Title <span style={{ color: "var(--text-4)", fontWeight: 400 }}>(optional)</span></label>
-            <input className="inp" value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="Give this note a title..." autoFocus />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Content *</label>
-            <textarea className="ta" value={form.content} onChange={e => { setForm({...form, content: e.target.value}); setErr(""); }} placeholder="Write anything you don't want to forget..." rows={5} />
-            {err && <span className="text-xs" style={{ color: "var(--red)" }}>{err}</span>}
-          </div>
-          <div className="form-group">
-            <label className="form-label">Color</label>
-            <div className="row gap8 wrap">
-              {PIN_COLORS.map(c => (
-                <div
-                  key={c}
-                  onClick={() => setForm({...form, color: c})}
-                  style={{
-                    width: 28, height: 28, borderRadius: 6,
-                    background: c, cursor: "pointer",
-                    border: `2px solid ${form.color === c ? "var(--blue)" : "var(--border-2)"}`,
-                    transition: "border-color .15s"
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="row gap8">
-            <button className="btn btn-ghost flex1" onClick={onClose}>Cancel</button>
-            <button className="btn btn-primary flex1" onClick={() => {
-              if (!form.content.trim()) { setErr("Content is required."); return; }
-              onAdd(form); onClose();
-            }}>Pin It 📌</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Add Reminder Modal ──
-function AddReminderModal({ onClose, onAdd, initDate }) {
-  const [form, setForm] = useState({ title: "", date: initDate || todayStr(), time: "", brand: "", notes: "" });
-  const [err, setErr] = useState("");
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <div className="modal-title">
-          <span>🔔 New Reminder</span>
-          <button className="modal-close" onClick={onClose}>✕</button>
-        </div>
-        <div className="col gap12">
-          <div className="form-group">
-            <label className="form-label">Reminder Title *</label>
-            <input className="inp" value={form.title} onChange={e => { setForm({...form, title: e.target.value}); setErr(""); }} placeholder="What do you need to remember?" autoFocus onKeyDown={e => e.key === "Enter" && form.title.trim() && (onAdd(form), onClose())} />
-            {err && <span className="text-xs" style={{ color: "var(--red)" }}>{err}</span>}
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Date</label>
-              <input className="inp" type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Time</label>
-              <input className="inp" type="time" value={form.time} onChange={e => setForm({...form, time: e.target.value})} />
-            </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Related Brand</label>
-            <select className="sel" value={form.brand} onChange={e => setForm({...form, brand: e.target.value})}>
-              <option value="">— General / All Brands —</option>
-              {BRANDS.map(b => <option key={b.id} value={b.id}>{b.emoji} {b.name}</option>)}
+        <div className="form-row mb12">
+          <div className="form-group"><label className="form-label">Priority</label>
+            <select className="sel" value={f.priority} onChange={e=>set("priority",e.target.value)}>
+              {PRIORITIES.map(p=><option key={p.key} value={p.key}>{p.label}</option>)}
             </select>
           </div>
-          <div className="form-group">
-            <label className="form-label">Notes <span style={{ color: "var(--text-4)", fontWeight: 400 }}>(optional)</span></label>
-            <textarea className="ta" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} rows={2} placeholder="Additional details..." />
+          <div className="form-group"><label className="form-label">Category</label>
+            <select className="sel" value={f.category} onChange={e=>set("category",e.target.value)}>
+              <option value="">— Select —</option>
+              {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
-          <div className="row gap8">
-            <button className="btn btn-ghost flex1" onClick={onClose}>Cancel</button>
-            <button className="btn btn-gold flex1" onClick={() => {
-              if (!form.title.trim()) { setErr("Title is required."); return; }
-              onAdd(form); onClose();
-            }}>Set Reminder 🔔</button>
+        </div>
+        <div className="form-row mb12">
+          <div className="form-group"><label className="form-label">Due Date</label>
+            <input className="inp" type="date" value={f.due} onChange={e=>set("due",e.target.value)}/>
           </div>
+          <div className="form-group"><label className="form-label">Est. Time (mins)</label>
+            <input className="inp" type="number" placeholder="e.g. 30" min="1" value={f.estimatedMins} onChange={e=>set("estimatedMins",e.target.value)}/>
+          </div>
+        </div>
+        {!brandId&&(
+          <div className="form-row mb12">
+            <div className="form-group"><label className="form-label">Brand</label>
+              <select className="sel" value={f.brand} onChange={e=>set("brand",e.target.value)}>
+                <option value="">— None —</option>
+                {brands.map(b=><option key={b.id} value={b.id}>{b.emoji} {b.name}</option>)}
+              </select>
+            </div>
+            <div className="form-group"><label className="form-label">Department</label>
+              <select className="sel" value={f.tab} onChange={e=>set("tab",e.target.value)}>
+                {BRAND_TABS.map(t=><option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+        <div className="form-group mb20">
+          <label className="form-label">Notes / Context</label>
+          <textarea className="ta" placeholder="Context, links, details..." value={f.note} onChange={e=>set("note",e.target.value)}/>
+        </div>
+        <div className="row gap8">
+          <button className="btn btn-primary flex1" onClick={save}>+ Add Task</button>
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ══════════════════════════════════════════════════════════
-//  CHART TOOLTIP
-// ══════════════════════════════════════════════════════════
-
-const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
+// ══════════════════════════════════════
+//  PIN MODAL
+// ══════════════════════════════════════
+function PinModal({onSave,onClose}) {
+  const [f,setF]=useState({title:"",content:"",color:PIN_COLORS[0]});
+  const [err,setErr]=useState("");
+  const save=()=>{ if(!f.content.trim()){setErr("Content required");return;} onSave(f); onClose(); };
   return (
-    <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px", boxShadow: "0 4px 16px rgba(0,0,0,.08)" }}>
-      <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 12 }}>{label}</div>
-      {payload.map(p => (
-        <div key={p.name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: p.color }} />
-          <span style={{ color: "var(--text-3)" }}>{p.name}:</span>
-          <span style={{ fontWeight: 600 }}>{p.value}</span>
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal-box">
+        <div className="modal-title"><span>NEW NOTE</span><button className="modal-close" onClick={onClose}>✕</button></div>
+        {err&&<div className="badge badge-red mb12" style={{display:"block",padding:"7px 10px",borderRadius:6}}>{err}</div>}
+        <div className="form-group mb12"><label className="form-label">Title (optional)</label><input className="inp" placeholder="Note title..." value={f.title} onChange={e=>setF(p=>({...p,title:e.target.value}))}/></div>
+        <div className="form-group mb14"><label className="form-label">Content *</label><textarea className="ta" style={{minHeight:100}} placeholder="Write anything..." value={f.content} onChange={e=>setF(p=>({...p,content:e.target.value}))} autoFocus/></div>
+        <div className="form-group mb20"><label className="form-label">Colour</label>
+          <div className="row gap6 wrap">{PIN_COLORS.map(c=><div key={c} onClick={()=>setF(p=>({...p,color:c}))} style={{width:26,height:26,borderRadius:6,background:c,cursor:"pointer",border:f.color===c?"2px solid #1E2235":"1.5px solid rgba(0,0,0,.12)"}}/>)}</div>
         </div>
-      ))}
+        <div className="row gap8"><button className="btn btn-primary flex1" onClick={save}>+ Add Note</button><button className="btn btn-ghost" onClick={onClose}>Cancel</button></div>
+      </div>
     </div>
   );
-};
+}
 
-// ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════
+//  REMINDER MODAL
+// ══════════════════════════════════════
+function ReminderModal({onSave,onClose,defaultDate}) {
+  const [f,setF]=useState({title:"",date:defaultDate||todayStr(),time:"09:00",brand:"",note:""});
+  const [err,setErr]=useState("");
+  const save=()=>{ if(!f.title.trim()){setErr("Title required");return;} onSave(f); onClose(); };
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal-box">
+        <div className="modal-title"><span>SET REMINDER</span><button className="modal-close" onClick={onClose}>✕</button></div>
+        {err&&<div className="badge badge-red mb12" style={{display:"block",padding:"7px 10px",borderRadius:6}}>{err}</div>}
+        <div className="form-group mb12"><label className="form-label">Title *</label><input className="inp" placeholder="What to remind you about?" value={f.title} onChange={e=>setF(p=>({...p,title:e.target.value}))} autoFocus/></div>
+        <div className="form-row mb12">
+          <div className="form-group"><label className="form-label">Date *</label><input className="inp" type="date" value={f.date} onChange={e=>setF(p=>({...p,date:e.target.value}))}/></div>
+          <div className="form-group"><label className="form-label">Time</label><input className="inp" type="time" value={f.time} onChange={e=>setF(p=>({...p,time:e.target.value}))}/></div>
+        </div>
+        <div className="form-group mb12"><label className="form-label">Brand (optional)</label>
+          <select className="sel" value={f.brand} onChange={e=>setF(p=>({...p,brand:e.target.value}))}>
+            <option value="">— General —</option>
+            {BRANDS.map(b=><option key={b.id} value={b.id}>{b.emoji} {b.name}</option>)}
+          </select>
+        </div>
+        <div className="form-group mb20"><label className="form-label">Note</label><textarea className="ta" placeholder="Additional context..." value={f.note} onChange={e=>setF(p=>({...p,note:e.target.value}))}/></div>
+        <div className="row gap8"><button className="btn btn-primary flex1" onClick={save}>Set Reminder</button><button className="btn btn-ghost" onClick={onClose}>Cancel</button></div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════
+//  TOOLTIP
+// ══════════════════════════════════════
+function CustomTooltip({active,payload,label}) {
+  if(!active||!payload?.length) return null;
+  return (
+    <div style={{background:"#fff",border:"1px solid #E4E7F0",borderRadius:8,padding:"8px 12px",boxShadow:"0 4px 16px rgba(13,15,26,.1)"}}>
+      <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"#9099B8",letterSpacing:1,marginBottom:5,textTransform:"uppercase"}}>{label}</div>
+      {payload.map((p,i)=><div key={i} style={{fontSize:12,color:p.color,fontWeight:500}}>{p.name}: {p.value}</div>)}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════
 //  MAIN APP
-// ══════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════
 export default function App() {
-  const [data, setData] = useState(() => loadData());
-  const [view, setView] = useState("dashboard");
-  const [activeBrand, setActiveBrand] = useState(BRANDS[0].id);
-  const [activeBrandTab, setActiveBrandTab] = useState("Reporting");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [modal, setModal] = useState(null); // null | "task" | "note" | {type:"reminder",date?:string}
-  const [calDate, setCalDate] = useState(new Date());
-  const [analyticsMode, setAnalyticsMode] = useState("weekly");
-  const [chatMsgs, setChatMsgs] = useState([]);
-  const [chatInput, setChatInput] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
-  const [taskFilter, setTaskFilter] = useState("all"); // all | pending | done
-  const [searchQ, setSearchQ] = useState("");
-  const [pinSearch, setPinSearch] = useState("");
-  const chatRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const { toasts, show: showToast } = useToast();
+  const [data,setData]=useState(loadData);
+  const [view,setView]=useState("dashboard");
+  const [activeBrand,setActiveBrand]=useState(null);
+  const [brandTab,setBrandTab]=useState("Reporting");
+  const [sidebarOpen,setSidebarOpen]=useState(false);
+  const [taskFilter,setTaskFilter]=useState("all");
+  const [searchQ,setSearchQ]=useState("");
+  const [showTaskModal,setShowTaskModal]=useState(false);
+  const [showPinModal,setShowPinModal]=useState(false);
+  const [showReminderModal,setShowReminderModal]=useState(false);
+  const [reminderDate,setReminderDate]=useState(null);
+  const [calMonth,setCalMonth]=useState(new Date().getMonth());
+  const [calYear,setCalYear]=useState(new Date().getFullYear());
+  const [chatMsgs,setChatMsgs]=useState([]);
+  const [chatInput,setChatInput]=useState("");
+  const [aiLoading,setAiLoading]=useState(false);
 
-  // Persist on every data change
-  useEffect(() => { saveData(data); }, [data]);
+  // Per-section AI insights stored by key
+  const [insights,setInsights]=useState({});
+  const [insightLoading,setInsightLoading]=useState({});
 
-  // Scroll chat to bottom
-  useEffect(() => {
-    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
-  }, [chatMsgs, aiLoading]);
+  const [activeTimers,setActiveTimers]=useState({});
+  const [logFilter,setLogFilter]=useState("all");
+  const chatEndRef=useRef(null);
+  const {toasts,show:showToast}=useToast();
 
-  // Close sidebar on route change (mobile)
-  useEffect(() => { setSidebarOpen(false); }, [view, activeBrand]);
+  useEffect(()=>{saveData(data);},[data]);
+  useEffect(()=>{chatEndRef.current?.scrollIntoView({behavior:"smooth"});},[chatMsgs]);
+  useEffect(()=>{addLog("session_start","Session started",null,null,null);},[]);
 
-  // ══════════════════════
-  //  DATA HELPERS
-  // ══════════════════════
+  const addLog=useCallback((type,title,brand=null,brandTab=null,detail=null)=>{
+    const entry={id:uid(),ts:nowISO(),type,title,brand,brandTab,detail};
+    setData(p=>({...p,timelog:[entry,...(p.timelog||[])].slice(0,500)}));
+  },[]);
 
-  const tk = (bid, tab) => `${bid}_${tab.toLowerCase()}`;
-  const getTasks = useCallback((bid, tab) => data.tasks[tk(bid, tab)] || [], [data.tasks]);
+  // ── STATS ──
+  const getStats=useCallback(()=>{
+    const all=Object.values(data.tasks).flat();
+    const today=todayStr();
+    const weekAgo=new Date(Date.now()-7*86400000).toISOString().split("T")[0];
+    const done=all.filter(t=>t.done).length;
+    const overdue=all.filter(t=>!t.done&&t.due&&t.due<today).length;
+    const todayTasks=all.filter(t=>t.createdAt?.startsWith(today));
+    const weekTasks=all.filter(t=>t.createdAt>=weekAgo);
+    const totalEstMins=all.filter(t=>t.estimatedMins).reduce((s,t)=>s+(t.estimatedMins||0),0);
+    return {total:all.length,done,pending:all.length-done,overdue,rate:all.length?Math.round(done/all.length*100):0,
+      todayTotal:todayTasks.length,todayDone:todayTasks.filter(t=>t.done).length,
+      weekTotal:weekTasks.length,weekDone:weekTasks.filter(t=>t.done).length,totalEstMins};
+  },[data.tasks]);
 
-  const mutate = useCallback((fn) => {
-    setData(prev => {
-      const next = fn({ ...prev, tasks: { ...prev.tasks }, notes: [...prev.notes], reminders: [...prev.reminders], uploads: { ...prev.uploads } });
-      return next;
+  const getBrandStats=useCallback(()=>BRANDS.map(b=>{
+    const tasks=Object.entries(data.tasks).filter(([k])=>k.startsWith(b.id)).flatMap(([,v])=>v);
+    const done=tasks.filter(t=>t.done).length;
+    const overdue=tasks.filter(t=>!t.done&&t.due&&t.due<todayStr()).length;
+    return {...b,tasks:tasks.length,done,pending:tasks.length-done,overdue,rate:tasks.length?Math.round(done/tasks.length*100):0};
+  }),[data.tasks]);
+
+  const getScore=useCallback(()=>{
+    const s=getStats(); const bs=getBrandStats();
+    if(s.total===0) return 50;
+    let sc=s.rate*0.4;
+    sc+=s.todayTotal>0?(s.todayDone/s.todayTotal)*25:10;
+    sc+=Math.max(0,20-(s.overdue*5));
+    sc+=(bs.filter(b=>b.tasks>0).length/BRANDS.length)*15;
+    return Math.round(Math.min(100,sc));
+  },[getStats,getBrandStats]);
+
+  // ── TASK CRUD ──
+  const addTask=useCallback((form)=>{
+    const brand=form.brand||activeBrand||"goldbet";
+    const tab=form.tab||brandTab;
+    const key=`${brand}_${tab}`;
+    const task={id:uid(),title:form.title,priority:form.priority||"medium",due:form.due||"",category:form.category||"",note:form.note||"",estimatedMins:form.estimatedMins||null,timeSpent:0,done:false,createdAt:nowISO()};
+    setData(p=>({...p,tasks:{...p.tasks,[key]:[...(p.tasks[key]||[]),task]}}));
+    addLog("task_added",`Task: "${task.title}"`,brand,tab,task.category?`Category: ${task.category}`:"");
+    showToast(`Task added to ${BRANDS.find(b=>b.id===brand)?.name||brand} · ${tab}`);
+  },[activeBrand,brandTab,addLog,showToast]);
+
+  const toggleTask=useCallback((key,id)=>{
+    setData(p=>{
+      const tasks=(p.tasks[key]||[]).map(t=>{
+        if(t.id!==id) return t;
+        const done=!t.done;
+        return {...t,done,doneAt:done?nowISO():null};
+      });
+      const task=tasks.find(t=>t.id===id);
+      if(task) addLog(task.done?"task_done":"task_added",`"${task.title}" ${task.done?"completed":"reopened"}`,key.split("_")[0],key.split("_").slice(1).join("_"),"");
+      return {...p,tasks:{...p.tasks,[key]:tasks}};
     });
-  }, []);
+  },[addLog]);
 
-  const addTask = useCallback((bid, tab, taskForm) => {
-    const key = tk(bid, tab);
-    const task = {
-      ...taskForm,
-      id: uid(),
-      status: "pending",
-      createdAt: new Date().toISOString(),
-      completedAt: null,
-    };
-    mutate(d => ({ ...d, tasks: { ...d.tasks, [key]: [...(d.tasks[key] || []), task] } }));
-    showToast("Task added successfully");
-  }, [mutate, showToast]);
+  const deleteTask=useCallback((key,id)=>{
+    setData(p=>{
+      const task=(p.tasks[key]||[]).find(t=>t.id===id);
+      if(task) addLog("task_deleted",`Deleted: "${task.title}"`,key.split("_")[0],key.split("_").slice(1).join("_"),"");
+      return {...p,tasks:{...p.tasks,[key]:(p.tasks[key]||[]).filter(t=>t.id!==id)}};
+    });
+    showToast("Task deleted","warning");
+  },[addLog,showToast]);
 
-  const toggleTask = useCallback((bid, tab, id) => {
-    const key = tk(bid, tab);
-    mutate(d => ({
-      ...d,
-      tasks: {
-        ...d.tasks,
-        [key]: (d.tasks[key] || []).map(t =>
-          t.id === id
-            ? { ...t, status: t.status === "done" ? "pending" : "done", completedAt: t.status === "pending" ? new Date().toISOString() : null }
-            : t
-        )
-      }
-    }));
-  }, [mutate]);
+  const startTimer=useCallback((taskId,title,brand,tab)=>{
+    setActiveTimers(p=>({...p,[taskId]:Date.now()}));
+    addLog("timer_start",`Timer: "${title}"`,brand,tab,"");
+    showToast("Timer started");
+  },[addLog,showToast]);
 
-  const deleteTask = useCallback((bid, tab, id) => {
-    const key = tk(bid, tab);
-    mutate(d => ({ ...d, tasks: { ...d.tasks, [key]: (d.tasks[key] || []).filter(t => t.id !== id) } }));
-    showToast("Task deleted");
-  }, [mutate, showToast]);
+  const stopTimer=useCallback((taskId,title,brand,tab,key)=>{
+    const start=activeTimers[taskId]; if(!start) return;
+    const elapsed=Date.now()-start;
+    setActiveTimers(p=>{const n={...p};delete n[taskId];return n;});
+    setData(p=>{const tasks=(p.tasks[key]||[]).map(t=>t.id===taskId?{...t,timeSpent:(t.timeSpent||0)+elapsed}:t); return {...p,tasks:{...p.tasks,[key]:tasks}};});
+    addLog("timer_stop",`Timer stopped: "${title}" — ${fmtDuration(elapsed)}`,brand,tab,`Logged: ${fmtDuration(elapsed)}`);
+    showToast(`Logged ${fmtDuration(elapsed)}`);
+  },[activeTimers,addLog,showToast]);
 
-  const addNote = useCallback((noteForm) => {
-    const note = { ...noteForm, id: uid(), createdAt: new Date().toISOString() };
-    mutate(d => ({ ...d, notes: [note, ...d.notes] }));
-    showToast("Note pinned");
-  }, [mutate, showToast]);
+  const addNote=useCallback((form)=>{
+    const note={id:uid(),title:form.title,content:form.content,color:form.color,createdAt:nowISO()};
+    setData(p=>({...p,notes:[note,...p.notes]}));
+    addLog("note_added",`Note: "${form.title||form.content.slice(0,40)}"`,null,null,"");
+    showToast("Note added");
+  },[addLog,showToast]);
 
-  const deleteNote = useCallback((id) => {
-    mutate(d => ({ ...d, notes: d.notes.filter(n => n.id !== id) }));
-    showToast("Note removed");
-  }, [mutate, showToast]);
+  const deleteNote=useCallback((id)=>{
+    const n=data.notes.find(n=>n.id===id);
+    if(n) addLog("note_deleted",`Note deleted: "${n.title||n.content.slice(0,30)}"`,null,null,"");
+    setData(p=>({...p,notes:p.notes.filter(n=>n.id!==id)}));
+    showToast("Note deleted","warning");
+  },[data.notes,addLog,showToast]);
 
-  const addReminder = useCallback((remForm) => {
-    const rem = { ...remForm, id: uid(), createdAt: new Date().toISOString() };
-    mutate(d => ({ ...d, reminders: [...d.reminders, rem] }));
-    showToast("Reminder set 🔔");
-  }, [mutate, showToast]);
+  const addReminder=useCallback((form)=>{
+    const rem={id:uid(),title:form.title,date:form.date,time:form.time,brand:form.brand,note:form.note,createdAt:nowISO()};
+    setData(p=>({...p,reminders:[...p.reminders,rem].sort((a,b)=>a.date.localeCompare(b.date))}));
+    addLog("reminder_set",`Reminder: "${form.title}" on ${fmtDate(form.date)}`,form.brand||null,null,"");
+    showToast("Reminder set");
+  },[addLog,showToast]);
 
-  const deleteReminder = useCallback((id) => {
-    mutate(d => ({ ...d, reminders: d.reminders.filter(r => r.id !== id) }));
-    showToast("Reminder removed");
-  }, [mutate, showToast]);
+  const deleteReminder=useCallback((id)=>{
+    setData(p=>({...p,reminders:p.reminders.filter(r=>r.id!==id)}));
+    showToast("Reminder removed","warning");
+  },[showToast]);
 
-  const handleFileUpload = useCallback(async (bid, files) => {
-    const newItems = [];
-    for (const file of Array.from(files)) {
-      if (file.size > 3 * 1024 * 1024) { showToast(`${file.name} too large (max 3MB)`, "error"); continue; }
-      const data64 = await new Promise(res => {
-        const reader = new FileReader();
-        reader.onload = () => res(reader.result);
-        reader.readAsDataURL(file);
-      });
-      newItems.push({ id: uid(), name: file.name, data: data64, type: file.type, uploadedAt: new Date().toISOString() });
-    }
-    if (!newItems.length) return;
-    mutate(d => ({ ...d, uploads: { ...d.uploads, [bid]: [...(d.uploads[bid] || []), ...newItems] } }));
-    showToast(`${newItems.length} file(s) uploaded`);
-  }, [mutate, showToast]);
-
-  const deleteUpload = useCallback((bid, id) => {
-    mutate(d => ({ ...d, uploads: { ...d.uploads, [bid]: (d.uploads[bid] || []).filter(u => u.id !== id) } }));
-    showToast("File removed");
-  }, [mutate, showToast]);
-
-  // ══════════════════════
-  //  STATS
-  // ══════════════════════
-
-  const getAllTasks = useCallback(() => Object.values(data.tasks).flat(), [data.tasks]);
-
-  const getStats = useCallback(() => {
-    const all = getAllTasks();
-    const now = new Date();
-    const ts = todayStr();
-    const todayTasks = all.filter(t => t.createdAt?.startsWith(ts));
-    const weekTasks = all.filter(t => t.createdAt && (now - new Date(t.createdAt)) / 86400000 <= 7);
-    const overdue = all.filter(t => t.status === "pending" && t.dueDate && t.dueDate < ts);
-    return {
-      total: all.length,
-      done: all.filter(t => t.status === "done").length,
-      pending: all.filter(t => t.status === "pending").length,
-      overdue: overdue.length,
-      todayTotal: todayTasks.length,
-      todayDone: todayTasks.filter(t => t.status === "done").length,
-      weekTotal: weekTasks.length,
-      weekDone: weekTasks.filter(t => t.status === "done").length,
-      rate: all.length ? Math.round((all.filter(t => t.status === "done").length / all.length) * 100) : 0,
-    };
-  }, [getAllTasks]);
-
-  const getBrandStats = useCallback(() => BRANDS.map(b => {
-    const all = BRAND_TABS.flatMap(tab => getTasks(b.id, tab));
-    const done = all.filter(t => t.status === "done").length;
-    const ts = todayStr();
-    const overdue = all.filter(t => t.status === "pending" && t.dueDate && t.dueDate < ts).length;
-    return {
-      ...b,
-      total: all.length,
-      done,
-      pending: all.length - done,
-      overdue,
-      rate: all.length ? Math.round((done / all.length) * 100) : 0,
-      tabStats: BRAND_TABS.map(tab => {
-        const tt = getTasks(b.id, tab);
-        return { tab, total: tt.length, done: tt.filter(t => t.status === "done").length };
-      })
-    };
-  }), [getTasks]);
-
-  const getChartData = useCallback((mode) => {
-    if (mode === "weekly") {
-      return Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(); d.setDate(d.getDate() - (6 - i));
-        const ds = d.toISOString().split("T")[0];
-        const all = getAllTasks();
-        return {
-          name: d.toLocaleDateString("en", { weekday: "short" }),
-          Added: all.filter(t => t.createdAt?.startsWith(ds)).length,
-          Completed: all.filter(t => t.completedAt?.startsWith(ds)).length,
-        };
-      });
-    }
-    // Monthly — last 6 months
-    return Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(); d.setMonth(d.getMonth() - (5 - i));
-      const [y, m] = [d.getFullYear(), d.getMonth()];
-      const all = getAllTasks();
-      return {
-        name: d.toLocaleDateString("en", { month: "short" }),
-        Added: all.filter(t => { const td = new Date(t.createdAt); return td.getFullYear() === y && td.getMonth() === m; }).length,
-        Completed: all.filter(t => { if (!t.completedAt) return false; const td = new Date(t.completedAt); return td.getFullYear() === y && td.getMonth() === m; }).length,
+  const handleUpload=useCallback((files,brand,tab)=>{
+    const key=`${brand}_${tab}`;
+    Array.from(files).forEach(file=>{
+      if(file.size>3145728){showToast("File too large (max 3MB)","error");return;}
+      const reader=new FileReader();
+      reader.onload=e=>{
+        const upload={id:uid(),name:file.name,type:file.type,data:e.target.result,createdAt:nowISO()};
+        setData(p=>({...p,uploads:{...p.uploads,[key]:[...(p.uploads[key]||[]),upload]}}));
+        showToast(`${file.name} uploaded`);
       };
+      reader.readAsDataURL(file);
     });
-  }, [getAllTasks]);
+  },[showToast]);
 
-  // ══════════════════════
-  //  CALENDAR HELPERS
-  // ══════════════════════
-
-  const getCalDays = (d) => {
-    const [y, m] = [d.getFullYear(), d.getMonth()];
-    const first = new Date(y, m, 1).getDay();
-    const dim = new Date(y, m + 1, 0).getDate();
-    const prev = new Date(y, m, 0).getDate();
-    const days = [];
-    for (let i = first - 1; i >= 0; i--) days.push({ d: prev - i, m: m - 1, y, other: true });
-    for (let i = 1; i <= dim; i++) days.push({ d: i, m, y, other: false });
-    while (days.length < 42) days.push({ d: days.length - first - dim + 1, m: m + 1, y, other: true });
-    return days;
+  // ── EXPORT/IMPORT ──
+  const exportData=()=>{
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download=`prodash-${todayStr()}.json`;a.click();
+    URL.revokeObjectURL(url); showToast("Data exported");
   };
-
-  const dayKey = (day) => `${day.y}-${String(day.m + 1).padStart(2, "0")}-${String(day.d).padStart(2, "0")}`;
-
-  // ══════════════════════
-  //  AI
-  // ══════════════════════
-
-  const buildSystemPrompt = useCallback(() => {
-    const s = getStats();
-    const bs = getBrandStats();
-    const now = new Date();
-    return `You are PRODASH AI — a sharp, professional productivity assistant for someone managing 6 brands: ${BRANDS.map(b => b.name).join(", ")}.
-
-CURRENT DATE: ${now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-
-LIVE PERFORMANCE DATA:
-• Total tasks: ${s.total} | Done: ${s.done} | Pending: ${s.pending} | Overdue: ${s.overdue}
-• Today's tasks: ${s.todayDone}/${s.todayTotal} completed
-• This week: ${s.weekDone}/${s.weekTotal} completed (${s.weekTotal ? Math.round((s.weekDone / s.weekTotal) * 100) : 0}% rate)
-• Overall completion rate: ${s.rate}%
-• Active reminders: ${data.reminders.length}
-• Pinboard notes: ${data.notes.length}
-
-BRAND BREAKDOWN:
-${bs.map(b => `• ${b.name}: ${b.done}/${b.total} done (${b.rate}%)${b.overdue > 0 ? ` — ⚠️ ${b.overdue} overdue` : ""}`).join("\n")}
-
-Your role: Analyse performance data, identify bottlenecks and risks, give SPECIFIC actionable advice. Reference the user's actual data when answering. Be direct, concise, and professional. Address the user as a capable professional. Keep responses to 4–8 sentences unless detail is explicitly requested.`;
-  }, [data.reminders.length, data.notes.length, getStats, getBrandStats]);
-
-  const sendMessage = async () => {
-    if (!chatInput.trim() || aiLoading) return;
-    const userMsg = { role: "user", content: chatInput.trim() };
-    const history = [...chatMsgs, userMsg];
-    setChatMsgs(history);
-    setChatInput("");
-    setAiLoading(true);
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": ["sk-ant-api03-VoyKgpprTtpngkF82LLonW2vPR1dpkHWqVOY35FG06LKuVPJj6vGpmZY4Ef25-lsykGlFwWw1HCb1LV8qmfv0g","hc3LgwAA"].join("-"), "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: buildSystemPrompt(),
-          messages: history,
-        }),
-      });
-      const json = await res.json();
-      if (json.content) {
-        const text = json.content.filter(c => c.type === "text").map(c => c.text).join("");
-        setChatMsgs([...history, { role: "assistant", content: text }]);
-      } else {
-        setChatMsgs([...history, { role: "assistant", content: "I couldn't get a response. Please try again." }]);
-      }
-    } catch {
-      setChatMsgs([...history, { role: "assistant", content: "Connection error — please check your network and try again." }]);
-    }
-    setAiLoading(false);
-  };
-
-  // ══════════════════════
-  //  EXPORT
-  // ══════════════════════
-
-  const exportData = () => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `prodash-backup-${todayStr()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast("Data exported successfully");
-  };
-
-  const importData = (file) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const parsed = JSON.parse(e.target.result);
-        if (parsed.tasks !== undefined) {
-          setData({
-            tasks: parsed.tasks || {},
-            notes: parsed.notes || [],
-            reminders: parsed.reminders || [],
-            uploads: parsed.uploads || {},
-            meta: parsed.meta || { createdAt: new Date().toISOString() }
-          });
-          showToast("Data imported successfully");
-        } else {
-          showToast("Invalid backup file", "error");
-        }
-      } catch { showToast("Failed to parse file", "error"); }
+  const importData=(file)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{const p=JSON.parse(e.target.result);if(p.tasks!==undefined){setData({tasks:p.tasks||{},notes:p.notes||[],reminders:p.reminders||[],uploads:p.uploads||{},timelog:p.timelog||[],aiInsights:p.aiInsights||{},meta:p.meta||{}});showToast("Imported");}else showToast("Invalid file","error");}
+      catch{showToast("Failed to parse","error");}
     };
     reader.readAsText(file);
   };
 
-  // ══════════════════════
-  //  COMPUTED
-  // ══════════════════════
+  // ══════════════════════════════════════
+  //  AI ENGINE — single call function
+  // ══════════════════════════════════════
+  const API_KEY=["sk-ant-api03-VoyKgpprTtpngkF82LLonW2vPR1dpkHWqVOY35FG06LKuVPJj6vGpmZY4Ef25-lsykGlFwWw1HCb1LV8qmfv0g","hc3LgwAA"].join("-");
 
-  const stats = getStats();
-  const bStats = getBrandStats();
-  const currentBrand = BRANDS.find(b => b.id === activeBrand);
-  const todayReminders = data.reminders.filter(r => r.date === todayStr());
+  const buildContext=useCallback(()=>{
+    const s=getStats(); const bs=getBrandStats(); const score=getScore();
+    const recentLog=(data.timelog||[]).slice(0,15).map(l=>`[${fmtTime(l.ts)}] ${l.title}`).join("\n");
+    return `PRODASH LIVE DATA — ${new Date().toLocaleString("en-GB")}
+PRODUCTIVITY SCORE: ${score}/100
+TASKS: ${s.total} total | ${s.done} done | ${s.pending} pending | ${s.overdue} OVERDUE | Rate: ${s.rate}%
+TODAY: ${s.todayDone}/${s.todayTotal} done | WEEK: ${s.weekDone}/${s.weekTotal} done
+BRANDS:
+${bs.map(b=>`  ${b.emoji} ${b.name}: ${b.done}/${b.tasks} (${b.rate}%)${b.overdue>0?` ⚠${b.overdue} overdue`:""}`).join("\n")}
+NOTES: ${data.notes.length} | REMINDERS: ${data.reminders.filter(r=>r.date>=todayStr()).length} upcoming
+RECENT ACTIVITY:
+${recentLog||"No recent activity"}`;
+  },[data,getStats,getBrandStats,getScore]);
 
-  // ══════════════════════
-  //  VIEWS
-  // ══════════════════════
+  const callAI=useCallback(async(messages,systemExtra="")=>{
+    const ctx=buildContext();
+    const system=`You are PRODASH AI — an elite personal productivity intelligence system for a professional managing 6 betting/gaming brands (Goldbet, Ultrabet, BoostBet, AllBets, BetGold, TechDev).
 
-  const renderDashboard = () => (
-    <div className="anim-up">
-      {/* KPIs */}
-      <div className="g4 mb20">
-        {[
-          { label: "Total Tasks", val: stats.total, icon: "📋", cls: "blue", sub: "All time" },
-          { label: "Completed", val: stats.done, icon: "✅", cls: "green", sub: `${stats.rate}% rate` },
-          { label: "Today", val: `${stats.todayDone}/${stats.todayTotal}`, icon: "⚡", cls: "gold", sub: "Tasks completed" },
-          { label: "Overdue", val: stats.overdue, icon: "⚠️", cls: stats.overdue > 0 ? "red" : "green", sub: stats.overdue > 0 ? "Need attention" : "All on track" },
-        ].map((k, i) => (
-          <div key={i} className={`kpi-card ${k.cls}`}>
-            <div className="kpi-icon">{k.icon}</div>
-            <div className="kpi-val">{k.val}</div>
-            <div className="kpi-lbl">{k.label}</div>
-            <div className="kpi-sub">{k.sub}</div>
-          </div>
-        ))}
-      </div>
+${ctx}
 
-      {/* Today's reminders banner */}
-      {todayReminders.length > 0 && (
-        <div style={{ background: "var(--amber-lt)", border: "1.5px solid #FCD34D", borderRadius: "var(--r-lg)", padding: "12px 16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 18 }}>🔔</span>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 13 }}>You have {todayReminders.length} reminder{todayReminders.length > 1 ? "s" : ""} today!</div>
-            <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}>{todayReminders.map(r => r.title).join(" · ")}</div>
-          </div>
-        </div>
-      )}
+YOUR MANDATE:
+- You have full visibility of all tasks, brands, time logs, and performance data above
+- Be brutally specific — reference actual brand names, exact numbers, real patterns
+- Give executive-level insights: what's at risk, what to prioritise, what patterns you see
+- Proactively identify problems before they become crises
+- Keep answers focused and direct — no fluff, no generic advice
+- Format with bullet points when listing multiple items${systemExtra}`;
+    const res=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,system,messages}),
+    });
+    const json=await res.json();
+    return json.content?.filter(c=>c.type==="text").map(c=>c.text).join("")||"";
+  },[buildContext]);
 
-      <div className="g2 mb20">
-        {/* Progress */}
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title">Progress Tracker</div>
-          </div>
-          {[
-            { label: "Today", done: stats.todayDone, total: stats.todayTotal, color: "var(--green)" },
-            { label: "This Week", done: stats.weekDone, total: stats.weekTotal, color: "var(--blue)" },
-            { label: "All Time", done: stats.done, total: stats.total, color: "var(--gold)" },
-          ].map(p => (
-            <div key={p.label} className="mb16">
-              <div className="row-sb mb8">
-                <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-2)" }}>{p.label}</span>
-                <span style={{ fontSize: 13, fontFamily: "DM Mono, monospace", color: p.color, fontWeight: 500 }}>
-                  {p.done}/{p.total} ({p.total ? Math.round((p.done / p.total) * 100) : 0}%)
-                </span>
-              </div>
-              <ProgressBar pct={p.total ? (p.done / p.total) * 100 : 0} color={p.color} />
-            </div>
-          ))}
-        </div>
+  // Fetch a named insight (cached per section)
+  const fetchInsight=useCallback(async(key,prompt,extra="")=>{
+    setInsightLoading(p=>({...p,[key]:true}));
+    try{
+      const text=await callAI([{role:"user",content:prompt}],extra);
+      setInsights(p=>({...p,[key]:text}));
+      addLog("ai_insight",`AI insight: ${key}`,null,null,"");
+    }catch(e){setInsights(p=>({...p,[key]:"Could not load — check connection."}));}
+    setInsightLoading(p=>({...p,[key]:false}));
+  },[callAI,addLog]);
 
-        {/* Brand overview */}
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title">Brand Overview</div>
-            <span className="text-xs text-muted text-mono">6 brands</span>
-          </div>
-          {bStats.map(b => (
-            <div key={b.id} className="mb12">
-              <div className="row-sb mb6">
-                <div className="row gap6">
-                  <span style={{ fontSize: 14 }}>{b.emoji}</span>
-                  <span style={{ fontSize: 13.5, fontWeight: 600, color: b.color }}>{b.name}</span>
-                  {b.overdue > 0 && <span className="badge badge-red">{b.overdue} overdue</span>}
-                </div>
-                <span style={{ fontSize: 13, fontFamily: "DM Mono, monospace", fontWeight: 500, color: b.rate >= 70 ? "var(--green)" : b.rate >= 40 ? "var(--amber)" : "var(--red)" }}>{b.rate}%</span>
-              </div>
-              <ProgressBar pct={b.rate} color={b.color} />
-            </div>
-          ))}
-        </div>
-      </div>
+  // Chat send
+  const sendMessage=async()=>{
+    if(!chatInput.trim()||aiLoading) return;
+    const userMsg={role:"user",content:chatInput.trim()};
+    const history=[...chatMsgs,userMsg];
+    setChatMsgs(history); setChatInput(""); setAiLoading(true);
+    try{
+      const text=await callAI(history);
+      setChatMsgs([...history,{role:"assistant",content:text||"Couldn't get a response. Try again."}]);
+    }catch{setChatMsgs([...history,{role:"assistant",content:"Connection error — please try again."}]);}
+    setAiLoading(false);
+  };
 
-      {/* 7-day chart */}
-      <div className="card mb20">
-        <div className="card-header">
-          <div className="card-title">7-Day Activity</div>
-          <span className="text-xs text-muted">Tasks added vs completed</span>
-        </div>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={getChartData("weekly")} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis dataKey="name" tick={{ fill: "var(--text-3)", fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "var(--text-3)", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="Added" fill="#BFDBFE" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="Completed" fill="var(--green)" radius={[4, 4, 0, 0]} />
-            <Legend wrapperStyle={{ fontSize: 12, color: "var(--text-3)" }} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+  // ── COMPUTED ──
+  const stats=getStats(); const bStats=getBrandStats(); const score=getScore();
+  const currentBrand=BRANDS.find(b=>b.id===activeBrand);
+  const todayReminders=data.reminders.filter(r=>r.date===todayStr());
 
-      {/* Upcoming reminders */}
-      {data.reminders.length > 0 && (
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title">Upcoming Reminders</div>
-            <button className="btn btn-ghost btn-sm" onClick={() => setView("calendar")}>See all →</button>
-          </div>
-          {data.reminders
-            .filter(r => r.date >= todayStr())
-            .sort((a, b) => a.date > b.date ? 1 : -1)
-            .slice(0, 4)
-            .map(r => {
-              const brand = BRANDS.find(b => b.id === r.brand);
-              return (
-                <div key={r.id} className="rem-row">
-                  <span className="rem-icon">🔔</span>
-                  <div className="flex1">
-                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{r.title}</div>
-                    <div className="row gap8 mt4 wrap">
-                      <span className="badge badge-gold">{r.date}{r.time ? ` · ${r.time}` : ""}</span>
-                      {brand && <span className="badge" style={{ background: brand.bg, color: brand.color }}>{brand.emoji} {brand.name}</span>}
-                    </div>
-                    {r.notes && <div className="text-sm text-muted mt4">{r.notes}</div>}
-                  </div>
-                </div>
-              );
-            })
-          }
-        </div>
-      )}
-    </div>
-  );
+  const getBrandTasks=(brand,tab)=>(data.tasks[`${brand}_${tab}`]||[]);
 
-  // ── BRAND VIEW ──
-  const renderBrand = () => {
-    const brand = BRANDS.find(b => b.id === activeBrand);
-    const allTasks = getTasks(activeBrand, activeBrandTab);
-
-    // Filter + search
-    let tasks = allTasks;
-    if (taskFilter === "pending") tasks = tasks.filter(t => t.status === "pending");
-    else if (taskFilter === "done") tasks = tasks.filter(t => t.status === "done");
-    if (searchQ.trim()) tasks = tasks.filter(t => t.title.toLowerCase().includes(searchQ.toLowerCase()) || t.notes?.toLowerCase().includes(searchQ.toLowerCase()));
-
-    const pending = allTasks.filter(t => t.status === "pending");
-    const done = allTasks.filter(t => t.status === "done");
-    const uploads = data.uploads[activeBrand] || [];
-    const bData = bStats.find(b => b.id === activeBrand);
-
+  // ══════════════════════════════════════
+  //  DASHBOARD
+  // ══════════════════════════════════════
+  const renderDashboard=()=>{
+    const today=todayStr();
+    const allTasks=Object.values(data.tasks).flat();
+    const chartData=Array.from({length:7},(_,i)=>{
+      const d=new Date(); d.setDate(d.getDate()-(6-i));
+      const ds=d.toISOString().split("T")[0];
+      const dayTasks=allTasks.filter(t=>t.createdAt?.startsWith(ds));
+      return {day:["S","M","T","W","T","F","S"][d.getDay()],added:dayTasks.length,done:dayTasks.filter(t=>t.done).length};
+    });
     return (
       <div className="anim-up">
-        {/* Brand Header */}
-        <div className="brand-hdr mb20" style={{ borderLeft: `4px solid ${brand.color}` }}>
-          <div className="brand-logo" style={{ background: brand.bg }}>
-            <span style={{ fontSize: 26 }}>{brand.emoji}</span>
-          </div>
-          <div className="flex1">
-            <div style={{ fontSize: 20, fontWeight: 800, color: brand.color }}>{brand.name}</div>
-            <div className="row gap8 mt4 wrap">
-              <span className="badge badge-gray">{allTasks.length} total</span>
-              <span className="badge badge-green">{done.length} done</span>
-              <span className="badge badge-amber">{pending.length} pending</span>
-              {bData?.overdue > 0 && <span className="badge badge-red">{bData.overdue} overdue</span>}
+        {/* AI Briefing */}
+        <div className="briefing-card">
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16}}>
+            <div style={{flex:1}}>
+              <div className="briefing-title">◎ AI DAILY BRIEFING</div>
+              {insightLoading["briefing"]
+                ? <div style={{color:"#52576E",fontSize:12.5,display:"flex",alignItems:"center",gap:8}}><span className="typing-dots"><span/><span/><span/></span> Analysing your data...</div>
+                : insights["briefing"]
+                  ? <div className="briefing-text">{insights["briefing"]}</div>
+                  : <div style={{color:"#9099B8",fontSize:12.5}}>Click Generate to get your AI briefing based on live data →</div>
+              }
+            </div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,flexShrink:0}}>
+              <ScoreRing score={score}/>
+              <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"#9099B8",letterSpacing:1,textTransform:"uppercase"}}>SCORE</div>
             </div>
           </div>
-          <div style={{ textAlign: "right", flexShrink: 0 }}>
-            <div className="brand-rate" style={{ color: brand.color }}>
-              {allTasks.length ? Math.round((done.length / allTasks.length) * 100) : 0}%
-            </div>
-            <div className="brand-rate-lbl">completion</div>
-            <div style={{ marginTop: 6 }}>
-              <ProgressBar pct={allTasks.length ? (done.length / allTasks.length) * 100 : 0} color={brand.color} />
-            </div>
-          </div>
-        </div>
-
-        {/* Sub-tab stats */}
-        <div className="g3 mb20">
-          {bData?.tabStats?.map(ts => (
-            <div key={ts.tab} className="card" style={{ padding: 14, cursor: "pointer", border: activeBrandTab === ts.tab ? `1.5px solid ${brand.color}` : undefined }}
-              onClick={() => setActiveBrandTab(ts.tab)}>
-              <div className="row-sb mb6">
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: activeBrandTab === ts.tab ? brand.color : "var(--text-2)" }}>
-                  {ts.tab === "Reporting" ? "📊" : ts.tab === "Compliance" ? "⚖️" : "💼"} {ts.tab}
-                </span>
-                <span className="text-xs text-mono" style={{ fontWeight: 700, color: ts.total ? "var(--green)" : "var(--text-4)" }}>
-                  {ts.done}/{ts.total}
-                </span>
-              </div>
-              <ProgressBar pct={ts.total ? (ts.done / ts.total) * 100 : 0} color={brand.color} />
-            </div>
-          ))}
-        </div>
-
-        {/* Tab bar */}
-        <div className="tab-bar mb16">
-          {BRAND_TABS.map(tab => (
-            <button key={tab} className={`tab-btn${activeBrandTab === tab ? " active" : ""}`} onClick={() => setActiveBrandTab(tab)}>
-              {tab === "Reporting" ? "📊 " : tab === "Compliance" ? "⚖️ " : "💼 "}{tab}
+          <div style={{marginTop:12,display:"flex",gap:8,flexWrap:"wrap"}}>
+            <button className="ai-btn" onClick={()=>fetchInsight("briefing","Give me a sharp executive morning briefing. Cover: (1) top risks right now, (2) what to prioritise today, (3) one strategic insight. Be direct — 4 sentences max.")} disabled={insightLoading["briefing"]}>
+              {insightLoading["briefing"]?"...":insights["briefing"]?"↻ Refresh Briefing":"▶ Generate Briefing"}
             </button>
-          ))}
-        </div>
-
-        {/* Controls */}
-        <div className="row-sb mb16 gap8 wrap">
-          <div className="row gap6 wrap">
-            <div className="inp-wrap" style={{ width: 220 }}>
-              <span className="inp-icon">🔍</span>
-              <input className="inp has-icon" value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search tasks..." style={{ height: 38 }} />
-            </div>
-            {["all", "pending", "done"].map(f => (
-              <button key={f} className={`pill-tab${taskFilter === f ? " active" : ""}`} onClick={() => setTaskFilter(f)}>
-                {f.charAt(0).toUpperCase() + f.slice(1)} {f === "all" ? allTasks.length : f === "pending" ? pending.length : done.length}
-              </button>
-            ))}
+            <button className="ai-btn" onClick={()=>fetchInsight("action_plan","Give me a numbered action plan for today. List the 5 most important things I should do right now based on urgency, brand performance, and overdue items. Be specific about brand and task names.")} disabled={insightLoading["action_plan"]}>
+              {insightLoading["action_plan"]?"...":"📋 Today's Action Plan"}
+            </button>
+            <button className="ai-btn" onClick={()=>fetchInsight("risk","What are my top 3 risks right now? For each risk, state what it is, which brand it affects, and what I should do about it immediately.")} disabled={insightLoading["risk"]}>
+              {insightLoading["risk"]?"...":"⚠ Risk Analysis"}
+            </button>
           </div>
-          <button className="btn btn-primary" onClick={() => setModal("task")}>
-            + Add Task
-          </button>
-        </div>
-
-        {/* Task list */}
-        <div className="mb24">
-          {tasks.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">{searchQ ? "🔍" : taskFilter === "done" ? "🎉" : "✨"}</div>
-              <div className="empty-title">{searchQ ? "No matching tasks" : taskFilter === "done" ? "No completed tasks yet" : "No pending tasks"}</div>
-              <div className="empty-desc">{searchQ ? "Try a different search term" : taskFilter === "pending" ? "All tasks are completed — great work!" : "Add your first task above"}</div>
+          {(insights["action_plan"]||insights["risk"])&&(
+            <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid rgba(79,70,229,.15)",display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              {insights["action_plan"]&&<div>
+                <div style={{fontFamily:"Martian Mono,monospace",fontSize:7.5,color:"#4F46E5",letterSpacing:1.5,marginBottom:5,textTransform:"uppercase"}}>TODAY'S PLAN</div>
+                <div style={{fontSize:12,color:"#1E2235",lineHeight:1.7}}>{insights["action_plan"]}</div>
+              </div>}
+              {insights["risk"]&&<div>
+                <div style={{fontFamily:"Martian Mono,monospace",fontSize:7.5,color:"#DC2626",letterSpacing:1.5,marginBottom:5,textTransform:"uppercase"}}>RISK ANALYSIS</div>
+                <div style={{fontSize:12,color:"#1E2235",lineHeight:1.7}}>{insights["risk"]}</div>
+              </div>}
             </div>
-          ) : (
-            tasks.map(t => (
-              <TaskItem
-                key={t.id}
-                task={t}
-                onToggle={() => toggleTask(activeBrand, activeBrandTab, t.id)}
-                onDelete={() => deleteTask(activeBrand, activeBrandTab, t.id)}
-              />
-            ))
           )}
         </div>
 
-        {/* Uploads */}
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title">📸 Screenshots & Files ({uploads.length})</div>
-            <button className="btn btn-ghost btn-sm" onClick={() => fileInputRef.current?.click()}>Upload</button>
+        {/* Today banner */}
+        {todayReminders.length>0&&(
+          <div className="today-banner mb16">
+            <span style={{fontSize:16}}>🔔</span>
+            <div><div style={{fontWeight:600,fontSize:13,color:"#92400E"}}>Today's Reminders ({todayReminders.length})</div>
+              <div style={{fontSize:12,color:"#B45309"}}>{todayReminders.map(r=>r.title).join(" · ")}</div>
+            </div>
           </div>
-          <div className="drop-zone" onClick={() => fileInputRef.current?.click()}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>📂</div>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>Drop files here or click to upload</div>
-            <div className="text-xs text-muted mt4">Images & PDFs · max 3MB each</div>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept="image/*,.pdf"
-            style={{ display: "none" }}
-            onChange={e => { handleFileUpload(activeBrand, e.target.files); e.target.value = ""; }}
-          />
-          {uploads.length > 0 && (
-            <div className="upload-grid">
-              {uploads.map(u => (
-                <div key={u.id} className="upload-thumb">
-                  {u.type?.startsWith("image/")
-                    ? <img src={u.data} alt={u.name} />
-                    : <div className="upload-thumb-icon">📄</div>
-                  }
-                  <div className="upload-name">{u.name}</div>
-                  <button className="upload-del" onClick={() => deleteUpload(activeBrand, u.id)}>✕</button>
+        )}
+
+        {/* KPIs */}
+        <div className="g4 mb14">
+          {[
+            {label:"TOTAL TASKS",val:stats.total,sub:"All time",cls:"blue",color:"#2563EB"},
+            {label:"COMPLETED",  val:stats.done, sub:`${stats.rate}% rate`,cls:"green",color:"#059669"},
+            {label:"TODAY",      val:`${stats.todayDone}/${stats.todayTotal}`,sub:"Tasks done",cls:"amber",color:"#D97706"},
+            {label:"OVERDUE",    val:stats.overdue,sub:stats.overdue>0?"Needs attention":"All clear",cls:stats.overdue>0?"red":"green",color:stats.overdue>0?"#DC2626":"#059669"},
+          ].map(k=>(
+            <div key={k.label} className={`kpi-card ${k.cls}`}>
+              <span className="kpi-label-top">{k.label}</span>
+              <span className="kpi-val" style={{color:k.color,fontSize:36}}>{k.val}</span>
+              <div className="kpi-sub">{k.sub}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Mid row */}
+        <div className="g2 mb14">
+          {/* Brand table */}
+          <div className="card" style={{padding:0,overflow:"hidden"}}>
+            <div style={{padding:"12px 16px",borderBottom:"1px solid #E4E7F0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span className="card-title">BRAND PERFORMANCE</span>
+              <button className="ai-btn" style={{fontSize:10,padding:"3px 10px"}} onClick={()=>fetchInsight("brand_summary","In 3 sentences, tell me which brands are performing well, which need intervention, and the single most important action I should take today regarding brand performance.")} disabled={insightLoading["brand_summary"]}>
+                {insightLoading["brand_summary"]?"...":"◎ AI Summary"}
+              </button>
+            </div>
+            {insights["brand_summary"]&&(
+              <div style={{padding:"10px 16px",background:"#F0F4FF",borderBottom:"1px solid #C7D2FE"}}>
+                <div style={{fontFamily:"Martian Mono,monospace",fontSize:7.5,color:"#4F46E5",letterSpacing:1.5,marginBottom:4,textTransform:"uppercase"}}>◎ AI TAKE</div>
+                <div style={{fontSize:12,color:"#1E2235",lineHeight:1.65}}>{insights["brand_summary"]}</div>
+              </div>
+            )}
+            <div>
+              {bStats.map((b,i)=>(
+                <div key={b.id} onClick={()=>{setActiveBrand(b.id);setView("brand");}}
+                  style={{display:"grid",gridTemplateColumns:"1.8fr .6fr .6fr 1fr",padding:"10px 16px",borderBottom:i<5?"1px solid #F3F4F8":"none",alignItems:"center",cursor:"pointer",transition:"background .12s"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="#F8F9FC"} onMouseLeave={e=>e.currentTarget.style.background=""}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:13}}>{b.emoji}</span>
+                    <span style={{fontSize:12.5,fontWeight:500,color:b.color}}>{b.name}</span>
+                    {b.overdue>0&&<span className="badge badge-red">{b.overdue} OVR</span>}
+                  </div>
+                  <span style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:"#9099B8"}}>{b.tasks}</span>
+                  <span style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:b.color,fontWeight:500}}>{b.done}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{flex:1,height:5,background:"#F3F4F8",borderRadius:99,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${b.rate}%`,background:b.color,borderRadius:99,transition:"width 1s"}}/>
+                    </div>
+                    <span style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:b.color,width:30,textAlign:"right"}}>{b.rate}%</span>
+                  </div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // ── ANALYTICS VIEW ──
-  const renderAnalytics = () => {
-    const pieData = bStats.filter(b => b.total > 0).map(b => ({ name: b.name, value: b.total, color: b.color }));
-    return (
-      <div className="anim-up">
-        <div className="row gap8 mb20 wrap">
-          <button className={`pill-tab${analyticsMode === "weekly" ? " active" : ""}`} onClick={() => setAnalyticsMode("weekly")}>Weekly View</button>
-          <button className={`pill-tab${analyticsMode === "monthly" ? " active" : ""}`} onClick={() => setAnalyticsMode("monthly")}>Monthly View</button>
-          <div style={{ marginLeft: "auto" }}>
-            <button className="btn btn-ghost btn-sm" onClick={exportData}>⬇ Export Data</button>
-          </div>
-        </div>
-
-        {/* KPIs */}
-        <div className="g4 mb20">
-          {[
-            { l: "Total Tasks", v: stats.total, c: "blue" },
-            { l: "Completed", v: stats.done, c: "green" },
-            { l: "Pending", v: stats.pending, c: "gold" },
-            { l: "Overdue", v: stats.overdue, c: stats.overdue > 0 ? "red" : "green" },
-          ].map((k, i) => (
-            <div key={i} className={`kpi-card ${k.c}`}>
-              <div className="kpi-val">{k.v}</div>
-              <div className="kpi-lbl">{k.l}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Line chart */}
-        <div className="card mb20">
-          <div className="card-header">
-            <div className="card-title">{analyticsMode === "weekly" ? "Last 7 Days" : "Last 6 Months"} — Tasks Added vs Completed</div>
-            <span className="text-xs text-muted text-mono">Completion rate: {stats.rate}%</span>
-          </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={getChartData(analyticsMode)} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="name" tick={{ fill: "var(--text-3)", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "var(--text-3)", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Line type="monotone" dataKey="Added" stroke="var(--blue)" strokeWidth={2.5} dot={{ fill: "var(--blue)", r: 4 }} activeDot={{ r: 6 }} />
-              <Line type="monotone" dataKey="Completed" stroke="var(--green)" strokeWidth={2.5} dot={{ fill: "var(--green)", r: 4 }} activeDot={{ r: 6 }} />
-              <Legend wrapperStyle={{ fontSize: 12, color: "var(--text-3)" }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="g2 mb20">
-          {/* Pie */}
-          <div className="card">
-            <div className="card-header"><div className="card-title">Task Distribution</div></div>
-            {pieData.length > 0 ? (
-              <>
-                <ResponsiveContainer width="100%" height={190}>
-                  <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={78} dataKey="value" paddingAngle={2}>
-                      {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                    </Pie>
-                    <Tooltip content={<CustomTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                  {pieData.map(d => (
-                    <div key={d.name} className="row gap6">
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: d.color }} />
-                      <span className="text-xs text-muted">{d.name} ({d.value})</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="empty-state" style={{ padding: "40px 0" }}>
-                <div className="empty-icon">📊</div>
-                <div className="empty-desc">Add tasks to see distribution</div>
-              </div>
-            )}
           </div>
 
-          {/* Brand rates */}
-          <div className="card">
-            <div className="card-header"><div className="card-title">Brand Completion Rates</div></div>
-            {bStats.map(b => (
-              <div key={b.id} className="mb12">
-                <div className="row-sb mb6">
-                  <span style={{ fontSize: 13, fontWeight: 600, color: b.color }}>{b.emoji} {b.name}</span>
-                  <div className="row gap6">
-                    {b.overdue > 0 && <span className="badge badge-red text-xs">{b.overdue}⚠</span>}
-                    <span className="text-xs text-mono" style={{
-                      fontWeight: 700,
-                      color: b.rate >= 70 ? "var(--green)" : b.rate >= 40 ? "var(--amber)" : b.total === 0 ? "var(--text-4)" : "var(--red)"
-                    }}>{b.rate}%</span>
+          {/* Right */}
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div className="card">
+              <div className="card-header"><span className="card-title">PROGRESS TRACKER</span></div>
+              {[
+                {label:"Today",pct:stats.todayTotal?Math.round(stats.todayDone/stats.todayTotal*100):0,val:`${stats.todayDone}/${stats.todayTotal}`,c:"#059669"},
+                {label:"This Week",pct:stats.weekTotal?Math.round(stats.weekDone/stats.weekTotal*100):0,val:`${stats.weekDone}/${stats.weekTotal}`,c:"#2563EB"},
+                {label:"All Time",pct:stats.rate,val:`${stats.done}/${stats.total}`,c:"#D97706"},
+              ].map(p=>(
+                <div key={p.label} className="mb12">
+                  <div className="row-sb mb6">
+                    <span style={{fontSize:12.5,fontWeight:500,color:"#374151"}}>{p.label}</span>
+                    <span style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:p.c,fontWeight:500}}>{p.val}</span>
                   </div>
+                  <div className="prog-track"><div className="prog-fill" style={{width:`${p.pct}%`,background:p.c}}/></div>
                 </div>
-                <ProgressBar pct={b.rate} color={b.color} />
+              ))}
+              <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid #F3F4F8",display:"flex",justifyContent:"space-around"}}>
+                {[[stats.overdue,"Overdue","#DC2626"],[data.reminders.filter(r=>r.date>=todayStr()).length,"Upcoming","#7C3AED"],[Object.keys(activeTimers).length,"Timers On","#D97706"]].map(([v,l,c])=>(
+                  <div key={l} style={{textAlign:"center"}}>
+                    <div style={{fontFamily:"Martian Mono,monospace",fontSize:22,fontWeight:600,color:c,lineHeight:1,letterSpacing:-1}}>{v}</div>
+                    <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"#9099B8",letterSpacing:1,marginTop:3,textTransform:"uppercase"}}>{l}</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Full breakdown table */}
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title">Full Brand Breakdown</div>
-          </div>
-          <div className="overflow-x">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  {["Brand", "Reporting", "Compliance", "Accounting", "Total", "Done", "Pending", "Overdue", "Rate"].map(h => (
-                    <th key={h}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {BRANDS.map(b => {
-                  const rep = getTasks(b.id, "Reporting");
-                  const com = getTasks(b.id, "Compliance");
-                  const acc = getTasks(b.id, "Accounting");
-                  const all = [...rep, ...com, ...acc];
-                  const done = all.filter(t => t.status === "done").length;
-                  const ts = todayStr();
-                  const ov = all.filter(t => t.status === "pending" && t.dueDate && t.dueDate < ts).length;
-                  const rate = all.length ? Math.round((done / all.length) * 100) : 0;
-                  const rateColor = rate >= 70 ? "var(--green)" : rate >= 40 ? "var(--amber)" : all.length === 0 ? "var(--text-4)" : "var(--red)";
-                  return (
-                    <tr key={b.id}>
-                      <td>
-                        <span style={{ color: b.color, fontWeight: 700 }}>{b.emoji} {b.name}</span>
-                      </td>
-                      <td className="text-muted">{rep.length}</td>
-                      <td className="text-muted">{com.length}</td>
-                      <td className="text-muted">{acc.length}</td>
-                      <td style={{ fontWeight: 600 }}>{all.length}</td>
-                      <td style={{ color: "var(--green)", fontWeight: 600 }}>{done}</td>
-                      <td style={{ color: "var(--amber)", fontWeight: 600 }}>{all.length - done}</td>
-                      <td>{ov > 0 ? <span className="badge badge-red">{ov}</span> : <span className="badge badge-green">0</span>}</td>
-                      <td>
-                        <span style={{ color: rateColor, fontFamily: "DM Mono, monospace", fontWeight: 700 }}>{rate}%</span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ── CALENDAR VIEW ──
-  const renderCalendar = () => {
-    const days = getCalDays(calDate);
-    const ts = todayStr();
-    const monthStr = `${calDate.getFullYear()}-${String(calDate.getMonth() + 1).padStart(2, "0")}`;
-    const monthRems = data.reminders
-      .filter(r => r.date?.startsWith(monthStr))
-      .sort((a, b) => (a.date + (a.time || "")) > (b.date + (b.time || "")) ? 1 : -1);
-
-    return (
-      <div className="anim-up">
-        <div className="g2 mb0" style={{ gap: 20, alignItems: "flex-start" }}>
-          {/* Calendar */}
-          <div className="card">
-            <div className="cal-nav">
-              <button className="btn btn-ghost btn-sm" onClick={() => { const d = new Date(calDate); d.setMonth(d.getMonth() - 1); setCalDate(d); }}>← Prev</button>
-              <div className="cal-month">{MONTHS[calDate.getMonth()]} {calDate.getFullYear()}</div>
-              <button className="btn btn-ghost btn-sm" onClick={() => { const d = new Date(calDate); d.setMonth(d.getMonth() + 1); setCalDate(d); }}>Next →</button>
             </div>
-            <div className="cal-grid mb4">
-              {WEEKDAYS.map(d => <div key={d} className="cal-day-hdr">{d}</div>)}
-            </div>
-            <div className="cal-grid">
-              {days.map((day, i) => {
-                const dk = dayKey(day);
-                const hasRem = !day.other && data.reminders.some(r => r.date === dk);
-                const isToday = dk === ts;
+            <div className="card" style={{flex:1}}>
+              <div className="card-header"><span className="card-title">RECENT ACTIVITY</span><button className="btn btn-ghost btn-xs" onClick={()=>setView("timelog")}>All →</button></div>
+              {(data.timelog||[]).filter(l=>l.type!=="session_start").slice(0,5).map(l=>{
+                const lt=LOG_TYPES[l.type]||{color:"#9099B8"};
                 return (
-                  <div
-                    key={i}
-                    className={`cal-day${isToday ? " cal-today" : ""}${day.other ? " cal-other" : ""}${hasRem ? " cal-has-rem" : ""}`}
-                    onClick={() => !day.other && setModal({ type: "reminder", date: dk })}
-                    title={hasRem ? "Has reminders — click to add more" : "Click to add reminder"}
-                  >
-                    {day.d}
-                    {hasRem && <span className="cal-rem-dot" />}
+                  <div key={l.id} style={{display:"flex",gap:9,padding:"7px 0",borderBottom:"1px solid #F9FAFB",alignItems:"flex-start"}}>
+                    <div style={{width:7,height:7,borderRadius:"50%",background:lt.color,flexShrink:0,marginTop:5}}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,color:"#0D0F1A",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.title}</div>
+                      <div style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"#9099B8",marginTop:2}}>{fmtDateTime(l.ts)}</div>
+                    </div>
                   </div>
                 );
               })}
-            </div>
-            <div className="mt12" style={{ display: "flex", gap: 12, flexWrap: "wrap", paddingTop: 10, borderTop: "1px solid var(--border)" }}>
-              <div className="row gap6 text-xs text-muted">
-                <div style={{ width: 10, height: 10, borderRadius: 3, background: "var(--blue)" }} /> Today
-              </div>
-              <div className="row gap6 text-xs text-muted">
-                <div style={{ width: 10, height: 10, borderRadius: 3, border: "1.5px solid var(--gold)" }} /> Has reminder
-              </div>
-              <button className="btn btn-gold btn-sm" style={{ marginLeft: "auto" }} onClick={() => setModal({ type: "reminder", date: ts })}>
-                + Add Reminder
-              </button>
+              {!(data.timelog||[]).filter(l=>l.type!=="session_start").length&&<div style={{fontSize:12,color:"#9099B8",textAlign:"center",padding:"16px 0"}}>No activity yet</div>}
             </div>
           </div>
+        </div>
 
-          {/* Reminders for this month */}
-          <div>
-            <div className="section-hdr mb12">
-              <div>
-                <div className="section-title">{MONTHS[calDate.getMonth()]} Reminders</div>
-                <div className="section-sub">{monthRems.length} reminder{monthRems.length !== 1 ? "s" : ""}</div>
-              </div>
+        {/* Chart */}
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">7-DAY ACTIVITY</span>
+            <div style={{display:"flex",gap:14,alignItems:"center"}}>
+              {[["#2563EB","Added"],["#059669","Done"]].map(([c,l])=>(
+                <div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:8,height:8,borderRadius:2,background:c}}/><span style={{fontSize:10.5,color:"#9099B8"}}>{l}</span></div>
+              ))}
+              <button className="ai-btn" style={{fontSize:10,padding:"3px 10px"}} onClick={()=>fetchInsight("weekly","Analyse my 7-day activity pattern. What does it tell you about my work habits? Any concerns or recommendations based on the trend?")} disabled={insightLoading["weekly"]}>◎ Analyse</button>
             </div>
-            {monthRems.length === 0 ? (
-              <div className="empty-state card">
-                <div className="empty-icon">📅</div>
-                <div className="empty-title">No reminders this month</div>
-                <div className="empty-desc">Click any calendar day to add a reminder</div>
-              </div>
-            ) : (
-              monthRems.map(r => {
-                const brand = BRANDS.find(b => b.id === r.brand);
-                const isPast = r.date < ts;
-                return (
-                  <div key={r.id} className="rem-row" style={{ opacity: isPast ? 0.55 : 1 }}>
-                    <span className="rem-icon">{isPast ? "✓" : "🔔"}</span>
-                    <div className="flex1 mw0">
-                      <div style={{ fontWeight: 600, fontSize: 13.5, textDecoration: isPast ? "line-through" : "none" }}>{r.title}</div>
-                      <div className="row gap6 mt4 wrap">
-                        <span className="badge badge-gold">{r.date}{r.time ? ` · ${r.time}` : ""}</span>
-                        {brand && <span className="badge" style={{ background: brand.bg, color: brand.color }}>{brand.emoji} {brand.name}</span>}
-                      </div>
-                      {r.notes && <div className="text-sm text-muted mt4">{r.notes}</div>}
-                    </div>
-                    <button className="btn btn-ghost btn-sm btn-icon" onClick={() => deleteReminder(r.id)} title="Delete reminder" style={{ color: "var(--red)", borderColor: "transparent" }}>✕</button>
+          </div>
+          {insights["weekly"]&&<div className="ai-panel" style={{marginBottom:14}}><div className="ai-panel-title">◎ WEEKLY PATTERN ANALYSIS</div><div className="ai-panel-text">{insights["weekly"]}</div></div>}
+          <ResponsiveContainer width="100%" height={130}>
+            <BarChart data={chartData} barGap={2}>
+              <CartesianGrid vertical={false} stroke="#F3F4F8"/>
+              <XAxis dataKey="day" tick={{fontFamily:"Martian Mono,monospace",fontSize:9,fill:"#9099B8"}} axisLine={false} tickLine={false}/>
+              <YAxis tick={{fontFamily:"Martian Mono,monospace",fontSize:9,fill:"#9099B8"}} axisLine={false} tickLine={false} allowDecimals={false}/>
+              <Tooltip content={<CustomTooltip/>}/>
+              <Bar dataKey="added" name="Added" fill="#2563EB" radius={[3,3,0,0]}/>
+              <Bar dataKey="done" name="Done" fill="#059669" radius={[3,3,0,0]}/>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    );
+  };
+
+  // ══════════════════════════════════════
+  //  TIME LOG
+  // ══════════════════════════════════════
+  const renderTimeLog=()=>{
+    const logs=(data.timelog||[]).filter(l=>logFilter==="all"||l.type===logFilter);
+    return (
+      <div className="anim-up">
+        <AIPanel insight={insights["timelog"]} loading={insightLoading["timelog"]}
+          onRefresh={()=>fetchInsight("timelog","Analyse my activity log. What patterns do you see? Am I spending time on the right things? What should I do differently based on this data? Be specific with examples from the log.")}
+          label="◎ AI ACTIVITY ANALYSIS"/>
+        <div className="row-sb mb16">
+          <div>
+            <div className="section-title" style={{marginBottom:4}}>ACTIVITY LOG</div>
+            <div style={{fontSize:12,color:"#9099B8"}}>Full timestamped audit trail — every action recorded</div>
+          </div>
+          <div className="row gap8">
+            <select className="sel" style={{width:160,padding:"6px 10px",fontSize:12}} value={logFilter} onChange={e=>setLogFilter(e.target.value)}>
+              <option value="all">All Activity</option>
+              {Object.entries(LOG_TYPES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+            </select>
+            <button className="btn btn-ghost btn-sm" onClick={()=>{if(window.confirm("Clear all logs?"))setData(p=>({...p,timelog:[]}));}}>Clear</button>
+          </div>
+        </div>
+        <div className="g4 mb16">
+          {[{l:"TOTAL ACTIONS",v:(data.timelog||[]).length,c:"#2563EB"},{l:"TASKS ADDED",v:(data.timelog||[]).filter(l=>l.type==="task_added").length,c:"#059669"},{l:"COMPLETED",v:(data.timelog||[]).filter(l=>l.type==="task_done").length,c:"#D97706"},{l:"TIME SESSIONS",v:(data.timelog||[]).filter(l=>l.type==="timer_stop").length,c:"#7C3AED"}].map(s=>(
+            <div key={s.l} className="card" style={{padding:"14px 16px"}}>
+              <span className="kpi-label-top">{s.l}</span>
+              <span style={{fontFamily:"Martian Mono,monospace",fontSize:28,fontWeight:600,color:s.c,lineHeight:1,letterSpacing:-1,display:"block"}}>{s.v}</span>
+            </div>
+          ))}
+        </div>
+        <div className="card" style={{padding:0,overflow:"hidden"}}>
+          <div style={{padding:"10px 16px",borderBottom:"1px solid #E4E7F0",display:"grid",gridTemplateColumns:"110px 1fr 120px 100px",gap:8}}>
+            {["TIMESTAMP","ACTION","BRAND","TYPE"].map(h=><span key={h} style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"#9099B8",letterSpacing:1.5}}>{h}</span>)}
+          </div>
+          <div style={{maxHeight:500,overflowY:"auto"}}>
+            {!logs.length&&<div style={{padding:32,textAlign:"center",color:"#9099B8",fontSize:12.5}}>No activity logged yet</div>}
+            {logs.map((l,i)=>{
+              const lt=LOG_TYPES[l.type]||{color:"#9099B8",label:l.type};
+              const brand=BRANDS.find(b=>b.id===l.brand);
+              return (
+                <div key={l.id} style={{display:"grid",gridTemplateColumns:"110px 1fr 120px 100px",gap:8,padding:"10px 16px",borderBottom:i<logs.length-1?"1px solid #F9FAFB":"none",alignItems:"start",transition:"background .12s"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="#FAFAFA"} onMouseLeave={e=>e.currentTarget.style.background=""}>
+                  <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"#9099B8"}}>
+                    <div>{new Date(l.ts).toLocaleDateString("en-GB",{day:"2-digit",month:"short"})}</div>
+                    <div>{fmtTime(l.ts)}</div>
                   </div>
-                );
-              })
-            )}
+                  <div>
+                    <div style={{fontSize:12.5,color:"#0D0F1A",fontWeight:500}}>{l.title}</div>
+                    {l.detail&&<div style={{fontSize:11,color:"#9099B8",marginTop:2}}>{l.detail}</div>}
+                  </div>
+                  <div style={{fontSize:12,color:brand?.color||"#9099B8",fontWeight:brand?500:400}}>
+                    {brand?`${brand.emoji} ${brand.name}`:"—"}
+                    {l.brandTab&&<div style={{fontSize:10,color:"#9099B8"}}>{l.brandTab}</div>}
+                  </div>
+                  <span style={{display:"inline-flex",alignItems:"center",gap:5}}>
+                    <div style={{width:5,height:5,borderRadius:"50%",background:lt.color,flexShrink:0}}/>
+                    <span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:lt.color,letterSpacing:.5}}>{lt.label}</span>
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
     );
   };
 
-  // ── PINBOARD VIEW ──
-  const renderPinboard = () => {
-    const filtered = data.notes.filter(n =>
-      !pinSearch.trim() ||
-      n.title?.toLowerCase().includes(pinSearch.toLowerCase()) ||
-      n.content.toLowerCase().includes(pinSearch.toLowerCase())
-    );
+  // ══════════════════════════════════════
+  //  BRAND
+  // ══════════════════════════════════════
+  const renderBrand=()=>{
+    if(!currentBrand) return null;
+    const key=`${activeBrand}_${brandTab}`;
+    let tasks=getBrandTasks(activeBrand,brandTab);
+    const uploads=data.uploads[key]||[];
+    const today=todayStr();
+    if(taskFilter!=="all") tasks=tasks.filter(t=>taskFilter==="done"?t.done:taskFilter==="pending"?!t.done:!t.done&&t.due&&t.due<today);
+    if(searchQ) tasks=tasks.filter(t=>t.title.toLowerCase().includes(searchQ.toLowerCase())||t.note?.toLowerCase().includes(searchQ.toLowerCase()));
+    const brandStat=bStats.find(b=>b.id===activeBrand);
+    const brandInsightKey=`brand_${activeBrand}_${brandTab}`;
+    const allBrandTasks=BRAND_TABS.flatMap(t=>getBrandTasks(activeBrand,t));
     return (
       <div className="anim-up">
-        <div className="section-hdr mb16">
-          <div>
-            <div className="section-title">📌 Pin Board</div>
-            <div className="section-sub">{data.notes.length} notes</div>
-          </div>
-          <div className="row gap8">
-            <div className="inp-wrap">
-              <span className="inp-icon" style={{ left: 10 }}>🔍</span>
-              <input className="inp has-icon" placeholder="Search notes..." style={{ height: 38, width: 200 }}
-                value={pinSearch}
-                onChange={e => setPinSearch(e.target.value)}
-              />
+        {/* Brand header */}
+        <div className="brand-hdr">
+          <div className="brand-logo" style={{background:currentBrand.bg}}>{currentBrand.emoji}</div>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:"Martian Mono,monospace",fontSize:16,fontWeight:600,color:currentBrand.color,letterSpacing:.5}}>{currentBrand.name}</div>
+            <div style={{display:"flex",gap:10,marginTop:6,flexWrap:"wrap"}}>
+              {[["Tasks",brandStat?.tasks||0,"#9099B8"],["Done",brandStat?.done||0,"#059669"],["Pending",brandStat?.pending||0,"#D97706"],["Overdue",brandStat?.overdue||0,brandStat?.overdue?"#DC2626":"#9099B8"]].map(([l,v,c])=>(
+                <div key={l} style={{display:"flex",gap:5,alignItems:"center"}}>
+                  <span style={{fontFamily:"Martian Mono,monospace",fontSize:16,fontWeight:600,color:c,lineHeight:1}}>{v}</span>
+                  <span style={{fontSize:10.5,color:"#9099B8"}}>{l}</span>
+                </div>
+              ))}
             </div>
-            <button className="btn btn-primary" onClick={() => setModal("note")}>+ Add Note</button>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end"}}>
+            <div style={{width:180}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                <span style={{fontSize:11,color:"#9099B8"}}>Completion</span>
+                <span style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:currentBrand.color,fontWeight:500}}>{brandStat?.rate||0}%</span>
+              </div>
+              <div className="prog-track"><div className="prog-fill" style={{width:`${brandStat?.rate||0}%`,background:currentBrand.color}}/></div>
+            </div>
+            <button className="ai-btn" style={{fontSize:10.5}} onClick={()=>fetchInsight(brandInsightKey,`Analyse ${currentBrand.name} specifically. Look at all their tasks across Reporting, Compliance, and Accounting. What's the status? What risks do you see? What should I do for ${currentBrand.name} today? Be specific about task details if any exist.`)} disabled={insightLoading[brandInsightKey]}>
+              {insightLoading[brandInsightKey]?"...":"◎ AI Brand Analysis"}
+            </button>
           </div>
         </div>
-        {data.notes.length === 0 ? (
-          <div className="empty-state card">
-            <div className="empty-icon">📌</div>
-            <div className="empty-title">Your pin board is empty</div>
-            <div className="empty-desc">Add notes, ideas, links, to-dos — anything you don't want to forget</div>
-            <button className="btn btn-primary mt16" onClick={() => setModal("note")}>Add your first note</button>
+
+        {/* AI Brand insight */}
+        {insights[brandInsightKey]&&<AIPanel insight={insights[brandInsightKey]} loading={insightLoading[brandInsightKey]} label={`◎ AI — ${currentBrand.name.toUpperCase()} ANALYSIS`}/>}
+
+        {/* Tabs */}
+        <div className="tab-bar mb16">
+          {BRAND_TABS.map(t=><button key={t} className={`tab-btn${brandTab===t?" active":""}`} onClick={()=>setBrandTab(t)}>{t}</button>)}
+        </div>
+
+        {/* Controls */}
+        <div className="row-sb mb14 gap8">
+          <div className="row gap6 flex1 mw0">
+            <div className="inp-wrap flex1">
+              <span className="inp-icon">🔍</span>
+              <input className="inp has-icon" placeholder={`Search ${brandTab} tasks...`} value={searchQ} onChange={e=>setSearchQ(e.target.value)}/>
+            </div>
+            <div className="pill-tabs">
+              {["all","pending","done","overdue"].map(f=>(
+                <div key={f} className={`pill-tab${taskFilter===f?" active":""}`} onClick={()=>setTaskFilter(f)}>
+                  {f==="all"?"All":f.charAt(0).toUpperCase()+f.slice(1)}
+                </div>
+              ))}
+            </div>
           </div>
-        ) : (
-          <div className="pinboard" id="pin-board-list">
-            {filtered.map(n => (
-              <div key={n.id} className="pin-card" style={{ background: n.color || PIN_COLORS[0] }}>
-                {n.title && <div className="pin-title">{n.title}</div>}
-                <div className="pin-content">{n.content}</div>
-                <div className="pin-footer">{fmtDate(n.createdAt)}</div>
-                <button className="pin-del" onClick={() => deleteNote(n.id)} title="Delete note">✕</button>
+          <button className="btn btn-primary btn-sm" onClick={()=>setShowTaskModal(true)}>+ Task</button>
+        </div>
+
+        {/* Tasks */}
+        {!tasks.length
+          ? <div className="empty-state"><div className="empty-icon">📋</div><div className="empty-title">No tasks</div><div className="empty-desc">Add your first {brandTab} task for {currentBrand.name}</div></div>
+          : tasks.map(t=>{
+            const isOverdue=!t.done&&t.due&&t.due<today;
+            const timerRunning=activeTimers[t.id];
+            return (
+              <div key={t.id} className={`task-item${t.done?" done":""}`} style={isOverdue?{borderLeftColor:"#DC2626",borderLeftWidth:3}:{}}>
+                <div className={`task-cb${t.done?" chk":""}`} onClick={()=>toggleTask(key,t.id)}>{t.done?"✓":""}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div className={`task-title${t.done?" done":""}`}>{t.title}</div>
+                  <div className="task-meta">
+                    {t.priority&&<span className={`badge ${t.priority==="low"?"badge-green":t.priority==="medium"?"badge-amber":t.priority==="high"?"badge-red":"badge-violet"}`}>{t.priority}</span>}
+                    {t.category&&<span className="badge badge-gray">{t.category}</span>}
+                    {isOverdue&&<span className="badge badge-red">⚠ OVERDUE</span>}
+                    {t.due&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:isOverdue?"#DC2626":"#9099B8"}}>Due {fmtDate(t.due)}</span>}
+                    {t.estimatedMins&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:"#9099B8"}}>~{t.estimatedMins}m</span>}
+                    {t.timeSpent>0&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:"#059669"}}>✓ {fmtDuration(t.timeSpent)}</span>}
+                    {timerRunning&&<span className="timer-badge">⏱ Running</span>}
+                    <span style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"#D0D4E2"}}>{fmtTime(t.createdAt)}</span>
+                  </div>
+                  {t.note&&<div className="task-note">{t.note}</div>}
+                  {t.doneAt&&<div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"#059669",marginTop:3}}>✓ Completed {fmtDateTime(t.doneAt)}</div>}
+                </div>
+                <div style={{display:"flex",gap:4,alignItems:"flex-start"}}>
+                  {!t.done&&(timerRunning
+                    ?<button className="btn btn-amber btn-xs" onClick={()=>stopTimer(t.id,t.title,activeBrand,brandTab,key)}>Stop</button>
+                    :<button className="btn btn-ghost btn-xs" onClick={()=>startTimer(t.id,t.title,activeBrand,brandTab)}>⏱</button>
+                  )}
+                  <button className="task-del" onClick={()=>deleteTask(key,t.id)}>✕</button>
+                </div>
+              </div>
+            );
+          })
+        }
+
+        {/* AI task recommendations */}
+        <div style={{marginTop:16}}>
+          <button className="ai-btn" onClick={()=>fetchInsight(`${brandInsightKey}_tasks`,`For ${currentBrand.name} ${brandTab}, based on the tasks I have, what should be my immediate priorities? Which tasks are at risk? Should I reprioritise anything? Give me 3 specific actionable recommendations.`)} disabled={insightLoading[`${brandInsightKey}_tasks`]}>
+            {insightLoading[`${brandInsightKey}_tasks`]?"...":"◎ AI Task Recommendations"}
+          </button>
+          {insights[`${brandInsightKey}_tasks`]&&<div className="ai-panel mt8"><div className="ai-panel-title">◎ TASK RECOMMENDATIONS — {brandTab.toUpperCase()}</div><div className="ai-panel-text">{insights[`${brandInsightKey}_tasks`]}</div></div>}
+        </div>
+
+        {/* Uploads */}
+        <div className="section-rule mt20"><span>FILES & UPLOADS</span></div>
+        <div className="drop-zone" onClick={()=>{const i=document.createElement("input");i.type="file";i.multiple=true;i.onchange=e=>handleUpload(e.target.files,activeBrand,brandTab);i.click();}}>
+          <div style={{fontSize:22,marginBottom:8}}>📎</div>
+          <div style={{fontSize:13,fontWeight:500,color:"#374151"}}>Drop files or click to upload</div>
+          <div style={{fontSize:11.5,color:"#9099B8",marginTop:4}}>Screenshots, reports, docs — max 3MB each</div>
+        </div>
+        {uploads.length>0&&(
+          <div className="upload-grid mt12">
+            {uploads.map(u=>(
+              <div key={u.id} className="upload-thumb">
+                {u.type.startsWith("image/")?<img src={u.data} alt={u.name}/>:<div className="upload-thumb-icon">📄</div>}
+                <div className="upload-name">{u.name}</div>
+                <button className="upload-del" onClick={()=>setData(p=>({...p,uploads:{...p.uploads,[key]:p.uploads[key].filter(x=>x.id!==u.id)}}))}>✕</button>
               </div>
             ))}
           </div>
@@ -1236,236 +922,438 @@ Your role: Analyse performance data, identify bottlenecks and risks, give SPECIF
     );
   };
 
-  // ── AI VIEW ──
-  const renderAI = () => {
-    const suggestions = [
-      "How is my productivity this week?",
-      "Which brand needs the most attention?",
-      "What are my top priorities today?",
-      "Give me a full performance summary",
-      "Which tasks are overdue?",
-      "How can I improve my completion rate?"
-    ];
+  // ══════════════════════════════════════
+  //  ANALYTICS
+  // ══════════════════════════════════════
+  const renderAnalytics=()=>{
+    const allTasks=Object.values(data.tasks).flat();
+    const pieData=bStats.filter(b=>b.tasks>0).map(b=>({name:b.name,value:b.tasks,color:b.color}));
+    const completionData=bStats.map(b=>({name:b.name,rate:b.rate,done:b.done,pending:b.pending}));
+    const catCount={};
+    allTasks.forEach(t=>{if(t.category)(catCount[t.category]=(catCount[t.category]||0)+1);});
+    const catData=Object.entries(catCount).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([n,v])=>({name:n,value:v}));
     return (
       <div className="anim-up">
-        <div className="card chat-container mb20">
-          <div className="chat-head">
-            <div className="chat-avatar">🤖</div>
-            <div className="flex1">
-              <div style={{ fontWeight: 700, fontSize: 14.5 }}>PRODASH AI</div>
-              <div className="text-xs text-muted">Personal productivity assistant — powered by real-time data</div>
+        <AIPanel insight={insights["analytics"]} loading={insightLoading["analytics"]}
+          onRefresh={()=>fetchInsight("analytics","Provide a comprehensive analytics review. Analyse the completion rates, identify which brands are underperforming and why, what categories are consuming most resources, and give me 3 strategic recommendations to improve my overall productivity score.")}
+          label="◎ AI ANALYTICS INTELLIGENCE"/>
+        <div className="g4 mb16">
+          {[{l:"PRODUCTIVITY SCORE",v:`${score}/100`,c:score>=70?"#059669":"#D97706"},{l:"COMPLETION RATE",v:`${stats.rate}%`,c:"#2563EB"},{l:"EST. TIME PIPELINE",v:stats.totalEstMins?fmtDuration(stats.totalEstMins*60000):"—",c:"#7C3AED"},{l:"ACTIVE BRANDS",v:bStats.filter(b=>b.tasks>0).length,c:"#B45309"}].map(s=>(
+            <div key={s.l} className="kpi-card" style={{borderTop:"none",borderLeft:`3px solid ${s.c}`}}>
+              <span className="kpi-label-top">{s.l}</span>
+              <span style={{fontFamily:"Martian Mono,monospace",fontSize:30,fontWeight:600,color:s.c,lineHeight:1,display:"block",marginBottom:4,letterSpacing:-1}}>{s.v}</span>
             </div>
-            <div className="chat-online" />
+          ))}
+        </div>
+        <div className="g2 mb14">
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">COMPLETION BY BRAND</span>
+              <button className="ai-btn" style={{fontSize:10,padding:"3px 10px"}} onClick={()=>fetchInsight("brand_chart","Looking at brand completion rates, which brands are outliers (top and bottom)? What's causing the gap? What specific actions would bring the lowest performers up to par?")} disabled={insightLoading["brand_chart"]}>◎ Insight</button>
+            </div>
+            {insights["brand_chart"]&&<div className="ai-panel mb12"><div className="ai-panel-title">◎ BRAND COMPLETION INSIGHT</div><div className="ai-panel-text">{insights["brand_chart"]}</div></div>}
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={completionData} layout="vertical" margin={{left:50}}>
+                <XAxis type="number" domain={[0,100]} tick={{fontFamily:"Martian Mono,monospace",fontSize:9,fill:"#9099B8"}} axisLine={false} tickLine={false}/>
+                <YAxis type="category" dataKey="name" tick={{fontFamily:"Martian Mono,monospace",fontSize:9,fill:"#9099B8"}} axisLine={false} tickLine={false} width={50}/>
+                <Tooltip content={<CustomTooltip/>}/>
+                <Bar dataKey="rate" name="Rate %" radius={[0,3,3,0]}>
+                  {completionData.map((e,i)=><Cell key={i} fill={bStats.find(b=>b.name===e.name)?.color||"#2563EB"}/>)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-
-          <div className="chat-msgs" ref={chatRef}>
-            {chatMsgs.length === 0 && (
-              <div style={{ textAlign: "center", padding: "32px 16px" }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>🤖</div>
-                <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>Hi! I'm your PRODASH AI</div>
-                <div className="text-sm text-muted" style={{ marginBottom: 20, maxWidth: 320, margin: "0 auto 20px" }}>
-                  I have real-time access to all your task data, brand performance metrics, and reminders. Ask me anything.
-                </div>
-                <div className="ai-suggestions">
-                  {suggestions.map(s => (
-                    <button key={s} className="ai-suggestion" onClick={() => setChatInput(s)}>{s}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {chatMsgs.map((m, i) => (
-              <div key={i} className={`chat-msg ${m.role} anim-up`}>{m.content}</div>
-            ))}
-            {aiLoading && (
-              <div className="chat-msg assistant">
-                <div className="typing-dots"><span /><span /><span /></div>
-              </div>
-            )}
-          </div>
-
-          <div className="chat-footer">
-            <input
-              className="inp flex1"
-              style={{ border: "1.5px solid var(--border-2)" }}
-              value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
-              placeholder="Ask about your productivity, tasks, brand performance..."
-            />
-            <button className="btn btn-primary" onClick={sendMessage} disabled={aiLoading} style={{ flexShrink: 0 }}>
-              {aiLoading ? "..." : "Send →"}
-            </button>
+          <div className="card">
+            <div className="card-header"><span className="card-title">TASKS BY BRAND</span></div>
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2} dataKey="value">
+                  {pieData.map((e,i)=><Cell key={i} fill={e.color}/>)}
+                </Pie>
+                <Tooltip content={<CustomTooltip/>}/>
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"#9099B8"}}/>
+              </PieChart>
+            </ResponsiveContainer>
           </div>
         </div>
-
-        {/* AI Insight cards */}
-        <div style={{ marginBottom: 12, fontWeight: 700, fontSize: 14 }}>⚡ Quick Insights</div>
-        <div className="g3">
-          {bStats
-            .sort((a, b) => a.rate - b.rate)
-            .slice(0, 3)
-            .map(b => (
-              <div key={b.id} className="card" style={{ borderLeft: `3px solid ${b.color}` }}>
-                <div style={{ fontSize: 20, marginBottom: 8 }}>{b.emoji}</div>
-                <div style={{ fontWeight: 700, fontSize: 13.5, color: b.color, marginBottom: 4 }}>{b.name}</div>
-                <div className="text-sm text-muted">{b.rate}% complete · {b.pending} pending</div>
-                {b.overdue > 0 && (
-                  <div className="badge badge-red mt8" style={{ display: "inline-flex" }}>⚠ {b.overdue} overdue</div>
-                )}
-                {b.rate < 30 && b.total > 0 && (
-                  <div className="text-xs mt8" style={{ color: "var(--red)", fontWeight: 600 }}>Needs urgent attention</div>
-                )}
-                {b.rate >= 80 && (
-                  <div className="text-xs mt8" style={{ color: "var(--green)", fontWeight: 600 }}>🎉 Excellent performance!</div>
-                )}
-              </div>
-            ))}
+        {catData.length>0&&(
+          <div className="card mb14">
+            <div className="card-header">
+              <span className="card-title">TASKS BY CATEGORY</span>
+              <button className="ai-btn" style={{fontSize:10,padding:"3px 10px"}} onClick={()=>fetchInsight("cat_chart","Based on my task categories, am I allocating time correctly across different work types? Are there any categories that seem under or over-represented given my role managing 6 betting brands?")} disabled={insightLoading["cat_chart"]}>◎ Analyse</button>
+            </div>
+            {insights["cat_chart"]&&<div className="ai-panel mb12"><div className="ai-panel-title">◎ CATEGORY ANALYSIS</div><div className="ai-panel-text">{insights["cat_chart"]}</div></div>}
+            <ResponsiveContainer width="100%" height={120}>
+              <BarChart data={catData}>
+                <XAxis dataKey="name" tick={{fontFamily:"Martian Mono,monospace",fontSize:9,fill:"#9099B8"}} axisLine={false} tickLine={false}/>
+                <YAxis tick={{fontFamily:"Martian Mono,monospace",fontSize:9,fill:"#9099B8"}} axisLine={false} tickLine={false} allowDecimals={false}/>
+                <Tooltip content={<CustomTooltip/>}/>
+                <Bar dataKey="value" name="Tasks" fill="#2563EB" radius={[3,3,0,0]}/>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+        <div className="card" style={{padding:0,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",borderBottom:"1px solid #E4E7F0"}}><span className="card-title">FULL BRAND BREAKDOWN</span></div>
+          <div className="overflow-x">
+            <table className="data-table"><thead><tr>
+              {["Brand","Total","Done","Pending","Overdue","Rate","Est. Time"].map(h=><th key={h}>{h}</th>)}
+            </tr></thead><tbody>
+              {bStats.map(b=>{
+                const allBT=BRAND_TABS.flatMap(t=>getBrandTasks(b.id,t));
+                const estMins=allBT.filter(t=>t.estimatedMins).reduce((s,t)=>s+(t.estimatedMins||0),0);
+                return (
+                  <tr key={b.id} style={{cursor:"pointer"}} onClick={()=>{setActiveBrand(b.id);setView("brand");}}>
+                    <td><span style={{fontWeight:500,color:b.color}}>{b.emoji} {b.name}</span></td>
+                    <td><span style={{fontFamily:"Martian Mono,monospace",fontSize:12}}>{b.tasks}</span></td>
+                    <td><span style={{fontFamily:"Martian Mono,monospace",fontSize:12,color:"#059669"}}>{b.done}</span></td>
+                    <td><span style={{fontFamily:"Martian Mono,monospace",fontSize:12,color:"#D97706"}}>{b.pending}</span></td>
+                    <td><span style={{fontFamily:"Martian Mono,monospace",fontSize:12,color:b.overdue>0?"#DC2626":"#9099B8"}}>{b.overdue}</span></td>
+                    <td><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:60,height:4,background:"#F3F4F8",borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:`${b.rate}%`,background:b.color,borderRadius:99}}/></div><span style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:b.color}}>{b.rate}%</span></div></td>
+                    <td><span style={{fontFamily:"Martian Mono,monospace",fontSize:11,color:"#9099B8"}}>{estMins?fmtDuration(estMins*60000):"—"}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody></table>
+          </div>
         </div>
       </div>
     );
   };
 
-  // ══════════════════════════════════════════════════════════
-  //  FINAL RENDER
-  // ══════════════════════════════════════════════════════════
-
-  const titleMap = {
-    dashboard: "Dashboard",
-    analytics: "Analytics",
-    calendar: "Calendar",
-    pinboard: "Pin Board",
-    ai: "AI Assistant",
-    brand: `${currentBrand?.emoji} ${currentBrand?.name} — ${activeBrandTab}`,
+  // ══════════════════════════════════════
+  //  CALENDAR
+  // ══════════════════════════════════════
+  const renderCalendar=()=>{
+    const firstDay=new Date(calYear,calMonth,1).getDay();
+    const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+    const today=todayStr();
+    const cells=Array.from({length:firstDay+daysInMonth},(_,i)=>{
+      const day=i-firstDay+1; if(day<1) return null;
+      const dateStr=`${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+      return {day,dateStr,rems:data.reminders.filter(r=>r.date===dateStr)};
+    });
+    return (
+      <div className="anim-up">
+        <AIPanel insight={insights["calendar"]} loading={insightLoading["calendar"]}
+          onRefresh={()=>fetchInsight("calendar",`Analyse my upcoming schedule. I have ${data.reminders.filter(r=>r.date>=todayStr()).length} reminders and ${Object.values(data.tasks).flat().filter(t=>!t.done&&t.due).length} tasks with due dates. Are there any scheduling conflicts, deadline risks, or things I should be aware of this month? What should I prioritise on my calendar?`)}
+          label="◎ AI SCHEDULE INTELLIGENCE"/>
+        <div className="g2 gap14">
+          <div className="card">
+            <div className="cal-nav">
+              <button className="btn btn-ghost btn-sm" onClick={()=>{if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1);}}>‹</button>
+              <span className="cal-month">{MONTHS[calMonth]} {calYear}</span>
+              <button className="btn btn-ghost btn-sm" onClick={()=>{if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1);}}>›</button>
+            </div>
+            <div className="cal-grid">
+              {WEEKDAYS.map(d=><div key={d} className="cal-day-hdr">{d.slice(0,2)}</div>)}
+              {cells.map((c,i)=>c===null
+                ?<div key={`e${i}`} className="cal-day cal-other"/>
+                :<div key={c.dateStr} className={`cal-day${c.dateStr===today?" cal-today":""}${c.rems.length?" cal-has-rem":""}`}
+                    onClick={()=>{setReminderDate(c.dateStr);setShowReminderModal(true);}}>
+                  {c.day}{c.rems.length>0&&<div className="cal-rem-dot"/>}
+                </div>
+              )}
+            </div>
+          </div>
+          <div>
+            <div className="card mb14">
+              <div className="card-header">
+                <span className="card-title">UPCOMING REMINDERS</span>
+                <button className="btn btn-primary btn-sm" onClick={()=>setShowReminderModal(true)}>+ Add</button>
+              </div>
+              {data.reminders.filter(r=>r.date>=todayStr()).length===0
+                ?<div className="empty-state" style={{padding:24}}><div className="empty-icon">🔔</div><div className="empty-title">No reminders</div></div>
+                :data.reminders.filter(r=>r.date>=todayStr()).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,8).map(r=>{
+                  const brand=BRANDS.find(b=>b.id===r.brand);
+                  return (
+                    <div key={r.id} className="rem-row">
+                      <span className="rem-icon">🔔</span>
+                      <div style={{flex:1}}>
+                        <div style={{fontWeight:500,fontSize:13,color:"#0D0F1A"}}>{r.title}</div>
+                        <div style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:"#9099B8",marginTop:3}}>
+                          {fmtDate(r.date)}{r.time?` · ${r.time}`:""}
+                          {brand&&<span style={{color:brand.color}}> · {brand.name}</span>}
+                        </div>
+                        {r.note&&<div style={{fontSize:11.5,color:"#9099B8",marginTop:3}}>{r.note}</div>}
+                      </div>
+                      <button className="task-del" style={{opacity:1}} onClick={()=>deleteReminder(r.id)}>✕</button>
+                    </div>
+                  );
+                })
+              }
+            </div>
+            <div className="card">
+              <div className="card-header"><span className="card-title">OVERDUE TASKS</span></div>
+              {Object.values(data.tasks).flat().filter(t=>!t.done&&t.due&&t.due<todayStr()).length===0
+                ?<div style={{fontSize:12.5,color:"#059669",textAlign:"center",padding:"14px 0"}}>✓ All clear — no overdue tasks</div>
+                :Object.entries(data.tasks).flatMap(([key,tasks])=>tasks.filter(t=>!t.done&&t.due&&t.due<todayStr()).map(t=>({...t,key}))).sort((a,b)=>a.due.localeCompare(b.due)).slice(0,6).map(t=>{
+                  const [bId,tab]=t.key.split("_");
+                  const brand=BRANDS.find(b=>b.id===bId);
+                  return (
+                    <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #F3F4F8"}}>
+                      <div style={{width:6,height:6,borderRadius:"50%",background:"#DC2626",flexShrink:0}}/>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:12.5,fontWeight:500,color:"#0D0F1A"}}>{t.title}</div>
+                        <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"#DC2626",marginTop:2}}>Overdue: {fmtDate(t.due)} · {brand?.emoji} {brand?.name} · {tab}</div>
+                      </div>
+                    </div>
+                  );
+                })
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
+
+  // ══════════════════════════════════════
+  //  PINBOARD
+  // ══════════════════════════════════════
+  const renderPinboard=()=>(
+    <div className="anim-up">
+      <AIPanel insight={insights["pinboard"]} loading={insightLoading["pinboard"]}
+        onRefresh={()=>fetchInsight("pinboard",`I have ${data.notes.length} notes on my pinboard. Based on the themes and content of my notes, what patterns do you see? Are there any action items buried in my notes that I should act on? Any strategic insights I should be paying more attention to?`)}
+        label="◎ AI NOTE ANALYSIS"/>
+      <div className="row-sb mb16">
+        <div>
+          <div className="section-title" style={{marginBottom:4}}>PIN BOARD</div>
+          <div style={{fontSize:12,color:"#9099B8"}}>{data.notes.length} notes · Ideas, strategies, quick thoughts</div>
+        </div>
+        <div className="row gap8">
+          <button className="ai-btn" onClick={()=>fetchInsight("pinboard_actions","Based on my pinboard notes, extract and list any action items, decisions that need to be made, or follow-ups I might have forgotten about. Be specific.")} disabled={insightLoading["pinboard_actions"]}>
+            {insightLoading["pinboard_actions"]?"...":"◎ Extract Action Items"}
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={()=>setShowPinModal(true)}>+ New Note</button>
+        </div>
+      </div>
+      {insights["pinboard_actions"]&&<AIPanel insight={insights["pinboard_actions"]} loading={insightLoading["pinboard_actions"]} label="◎ ACTION ITEMS FROM NOTES"/>}
+      {!data.notes.length
+        ?<div className="empty-state"><div className="empty-icon">📌</div><div className="empty-title">No notes yet</div><div className="empty-desc">Add ideas, strategies, and anything worth remembering</div></div>
+        :<div className="pinboard">
+          {data.notes.map(n=>(
+            <div key={n.id} className="pin-card" style={{background:n.color}}>
+              <button className="pin-del" onClick={e=>{e.stopPropagation();deleteNote(n.id);}}>✕</button>
+              {n.title&&<div className="pin-title">{n.title}</div>}
+              <div className="pin-content">{n.content}</div>
+              <div className="pin-footer">{fmtDateTime(n.createdAt)}</div>
+            </div>
+          ))}
+        </div>
+      }
+    </div>
+  );
+
+  // ══════════════════════════════════════
+  //  AI ASSISTANT
+  // ══════════════════════════════════════
+  const renderAI=()=>(
+    <div className="anim-up">
+      <div className="g2 gap14">
+        <div>
+          <div className="chat-container">
+            <div className="chat-head">
+              <div className="chat-avatar">◎</div>
+              <div style={{flex:1}}>
+                <div className="chat-name">PRODASH AI</div>
+                <div className="chat-sub">Full data access · Live intelligence · Your personal advisor</div>
+              </div>
+              <div className="chat-online"/>
+            </div>
+            <div className="chat-msgs">
+              {!chatMsgs.length&&(
+                <div style={{margin:"auto",textAlign:"center",padding:"20px 0"}}>
+                  <div style={{fontSize:28,marginBottom:12,opacity:.2}}>◎</div>
+                  <div style={{fontSize:13,color:"#9099B8",marginBottom:5,fontWeight:500}}>Your AI has full visibility of all your data</div>
+                  <div style={{fontSize:12,color:"#C5C9DA",maxWidth:300,margin:"0 auto 16px",lineHeight:1.6}}>I can see every task, brand, overdue item, time log, note, and reminder. Ask me anything.</div>
+                  <div className="ai-suggestions">
+                    {["What should I focus on today?","Which brand is at most risk?","Am I on track this week?","Analyse my productivity","What are my top 3 risks?","Plan my day for maximum output","What's my weakest area?","Give me a weekly forecast"].map(s=>(
+                      <button key={s} className="ai-suggestion" onClick={()=>{setChatInput(s);setTimeout(()=>sendMessage(),50);}}>{s}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {chatMsgs.map((m,i)=><div key={i} className={`chat-msg ${m.role}`}>{m.content}</div>)}
+              {aiLoading&&<div className="chat-msg assistant"><span className="typing-dots"><span/><span/><span/></span></div>}
+              <div ref={chatEndRef}/>
+            </div>
+            <div className="chat-footer">
+              <input className="inp" style={{flex:1}} placeholder="Ask anything about your tasks, brands, priorities..." value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&sendMessage()}/>
+              <button className="btn btn-primary" onClick={sendMessage} disabled={!chatInput.trim()||aiLoading}>Send →</button>
+            </div>
+          </div>
+        </div>
+        {/* Right panel */}
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {/* Score card — light */}
+          <div style={{background:"linear-gradient(135deg,#EEF2FF,#E0E7FF)",border:"1px solid #C7D2FE",borderRadius:16,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"linear-gradient(90deg,#2563EB,#4F46E5,#7C3AED,#2563EB)",backgroundSize:"200%",animation:"brief-line 4s linear infinite"}}/>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+              <ScoreRing score={score} size={64}/>
+              <div>
+                <div style={{fontFamily:"Martian Mono,monospace",fontSize:7.5,color:"#4F46E5",letterSpacing:2,marginBottom:4,textTransform:"uppercase"}}>PRODUCTIVITY SCORE</div>
+                <div style={{fontFamily:"Martian Mono,monospace",fontSize:26,fontWeight:600,color:"#0D0F1A",lineHeight:1,letterSpacing:-1}}>{score}<span style={{fontSize:13,color:"#9099B8",fontWeight:400}}>/100</span></div>
+                <div style={{fontSize:11,color:"#52576E",marginTop:3}}>{score>=80?"Excellent":score>=60?"Good — improving":score>=40?"Needs focus":"Alert — take action"}</div>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {[[`${stats.rate}%`,"Rate","#059669"],[`${stats.overdue}`,"Overdue","#DC2626"],[`${stats.todayDone}/${stats.todayTotal}`,"Today","#2563EB"],[`${bStats.filter(b=>b.tasks>0).length}`,"Brands Active","#7C3AED"]].map(([v,l,c])=>(
+                <div key={l} style={{background:"rgba(255,255,255,.6)",borderRadius:8,padding:"9px 11px"}}>
+                  <div style={{fontFamily:"Martian Mono,monospace",fontSize:17,fontWeight:600,color:c,lineHeight:1,letterSpacing:-.5}}>{v}</div>
+                  <div style={{fontFamily:"Martian Mono,monospace",fontSize:7.5,color:"#9099B8",letterSpacing:1,marginTop:4,textTransform:"uppercase"}}>{l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Smart suggestions */}
+          <div className="card">
+            <div className="card-header"><span className="card-title">◎ SMART ACTIONS</span></div>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {[
+                {label:"What did I miss this week?",prompt:"What tasks or items did I miss, forget, or leave incomplete this week? Give me a specific list."},
+                {label:"Prioritise my overdue tasks",prompt:`I have ${stats.overdue} overdue tasks. Rank them by business impact and tell me which to tackle first and why.`},
+                {label:"How to improve my score?",prompt:`My productivity score is ${score}/100. Give me 4 specific, achievable actions I can take today to improve it. Be concrete.`},
+                {label:"Weekly performance review",prompt:"Give me a concise weekly performance review. What went well? What didn't? What should I change next week?"},
+                {label:"Strategic recommendations",prompt:"Based on everything you can see, what are your top 3 strategic recommendations for running my 6 brands more effectively?"},
+              ].map(s=>(
+                <button key={s.label} className="ai-btn" style={{justifyContent:"flex-start",borderRadius:8,padding:"8px 12px",fontSize:12,textAlign:"left"}}
+                  onClick={()=>{setChatInput(s.prompt);setTimeout(()=>sendMessage(),50);}}>
+                  → {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Overdue alerts */}
+          {stats.overdue>0&&(
+            <div className="card" style={{borderLeft:"3px solid #DC2626"}}>
+              <div className="card-header"><span className="card-title" style={{color:"#DC2626"}}>⚠ ALERTS</span></div>
+              {bStats.filter(b=>b.overdue>0).map(b=>(
+                <div key={b.id} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:"1px solid #F3F4F8"}}>
+                  <span style={{fontSize:14}}>{b.emoji}</span>
+                  <div style={{flex:1}}>
+                    <span style={{fontWeight:500,fontSize:12.5,color:b.color}}>{b.name}</span>
+                    <span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:"#DC2626",marginLeft:8}}>{b.overdue} overdue</span>
+                  </div>
+                  <button className="btn btn-ghost btn-xs" onClick={()=>{setActiveBrand(b.id);setView("brand");setTaskFilter("overdue");}}>View →</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // ══════════════════════════════════════
+  //  MAIN RETURN
+  // ══════════════════════════════════════
+  const pageTitle=view==="brand"&&currentBrand?currentBrand.name.toUpperCase():{dashboard:"DASHBOARD",timelog:"TIME LOG",analytics:"ANALYTICS",calendar:"CALENDAR",pinboard:"PIN BOARD",ai:"AI ASSISTANT"}[view]||"";
 
   return (
     <div className="app">
-      {/* Mobile overlay */}
-      <div className={`mob-overlay${sidebarOpen ? " open" : ""}`} onClick={() => setSidebarOpen(false)} />
-
-      {/* ── SIDEBAR ── */}
-      <nav className={`sidebar${sidebarOpen ? " open" : ""}`}>
+      <div className={`mob-overlay${sidebarOpen?" open":""}`} onClick={()=>setSidebarOpen(false)}/>
+      <nav className={`sidebar${sidebarOpen?" open":""}`}>
         <div className="logo-area">
           <div className="logo">
-            <span>⚡ PRODASH</span>
+            <div className="logo-icon">⚡</div>
+            <span className="logo-text">PRODASH</span>
             <span className="logo-badge">LIVE</span>
           </div>
-          <div className="logo-date">{new Date().toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}</div>
+          <div className="logo-date">{new Date().toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"})}</div>
         </div>
-
         <div className="nav-section">
-          <div className="nav-section-label">Main</div>
-          {NAV_ITEMS.map(item => (
-            <div
-              key={item.id}
-              className={`nav-item${view === item.id ? " active" : ""}`}
-              onClick={() => setView(item.id)}
-            >
-              <span className="nav-icon">{item.icon}</span>
-              {item.label}
+          <div className="nav-section-label">Navigate</div>
+          {NAV_ITEMS.map(item=>(
+            <div key={item.id} className={`nav-item${view===item.id&&!activeBrand?" active":""}`} onClick={()=>{setView(item.id);setActiveBrand(null);setSidebarOpen(false);}}>
+              <span className="nav-icon">{item.icon}</span>{item.label}
             </div>
           ))}
         </div>
-
         <div className="nav-section">
           <div className="nav-section-label">Brands</div>
-          {BRANDS.map(b => (
-            <div
-              key={b.id}
-              className={`nav-item${view === "brand" && activeBrand === b.id ? " active" : ""}`}
-              onClick={() => { setActiveBrand(b.id); setView("brand"); setTaskFilter("all"); setSearchQ(""); }}
-            >
-              <div className="brand-marker" style={{ background: b.color }} />
-              {b.emoji} {b.name}
-              {bStats.find(bs => bs.id === b.id)?.overdue > 0 && (
-                <span style={{ marginLeft: "auto", fontSize: 9, background: "var(--red-lt)", color: "var(--red)", padding: "1px 5px", borderRadius: 99, fontWeight: 700 }}>!</span>
-              )}
-            </div>
-          ))}
+          {BRANDS.map(b=>{
+            const bs=bStats.find(x=>x.id===b.id);
+            return (
+              <div key={b.id} className={`nav-item${view==="brand"&&activeBrand===b.id?" active":""}`}
+                onClick={()=>{setActiveBrand(b.id);setView("brand");setBrandTab("Reporting");setTaskFilter("all");setSearchQ("");setSidebarOpen(false);}}>
+                <div className="brand-marker" style={{background:b.color}}/>
+                {b.emoji} {b.name}
+                {bs?.overdue>0&&<div className="nav-alert"/>}
+              </div>
+            );
+          })}
         </div>
-
         <div className="sidebar-stats">
-          <div className="sidebar-stats-row mb8">
-            <div>
-              <div className="ss-val">{stats.done}</div>
-              <div className="ss-lbl">Done</div>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <div className="ss-val">{stats.pending}</div>
-              <div className="ss-lbl">Pending</div>
-            </div>
+          <div className="sidebar-stats-row">
+            <div><div className="ss-val">{stats.done}</div><div className="ss-lbl">Done</div></div>
+            <div style={{textAlign:"right"}}><div className="ss-val" style={{color:"#9099B8"}}>{stats.pending}</div><div className="ss-lbl">Left</div></div>
           </div>
-          <ProgressBar pct={stats.rate} color="var(--green)" />
-          <div className="text-xs text-muted text-mono mt4" style={{ textAlign: "center" }}>{stats.rate}% overall completion</div>
-          <button className="btn btn-ghost btn-sm w-full mt8" onClick={exportData} style={{ fontSize: 11 }}>⬇ Export Backup</button>
+          <div className="sidebar-prog"><div className="sidebar-prog-fill" style={{width:`${stats.rate}%`}}/></div>
+          <div className="sidebar-rate">{stats.rate}% completion · Score {score}</div>
+          <div style={{display:"flex",gap:6,marginTop:10}}>
+            <button className="btn btn-ghost btn-xs w-full" style={{fontSize:10}} onClick={exportData}>↓ Export</button>
+            <label className="btn btn-ghost btn-xs w-full" style={{fontSize:10,cursor:"pointer",textAlign:"center"}}>
+              ↑ Import<input type="file" accept=".json" style={{display:"none"}} onChange={e=>e.target.files[0]&&importData(e.target.files[0])}/>
+            </label>
+          </div>
         </div>
       </nav>
 
-      {/* ── MAIN ── */}
-      <main className="main">
+      <div className="main">
         <div className="topbar">
           <div className="row gap10">
-            <div className="hamburger" onClick={() => setSidebarOpen(!sidebarOpen)}>
-              <span /><span /><span />
-            </div>
-            <div className="page-title">{titleMap[view] || "Dashboard"}</div>
+            <button className="hamburger" onClick={()=>setSidebarOpen(p=>!p)}><span/><span/><span/></button>
+            <span className="page-title">{pageTitle}</span>
+            {view==="brand"&&currentBrand&&(
+              <div style={{display:"flex",gap:6}}>
+                {BRAND_TABS.map(t=><button key={t} className={`btn btn-xs${brandTab===t?" btn-dark":" btn-ghost"}`} onClick={()=>setBrandTab(t)}>{t}</button>)}
+              </div>
+            )}
           </div>
           <div className="topbar-right">
-            {view === "brand" && currentBrand && (
-              <div className="topbar-dot" style={{ background: currentBrand.color }} />
-            )}
-            <div className="topbar-date">
-              {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+            <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,padding:"4px 10px",background:score>=70?"#ECFDF5":score>=50?"#FFFBEB":"#FEF2F2",borderRadius:99,color:score>=70?"#059669":score>=50?"#D97706":"#DC2626",fontWeight:600,letterSpacing:.5,border:`1px solid ${score>=70?"#A7F3D0":score>=50?"#FDE68A":"#FCA5A5"}`}}>
+              ◎ SCORE {score}
             </div>
-            {data.reminders.filter(r => r.date >= todayStr()).length > 0 && (
-              <button
-                className="btn btn-ghost btn-sm"
-                style={{ position: "relative" }}
-                onClick={() => setView("calendar")}
-                title="View reminders"
-              >
-                🔔
-                <span style={{
-                  position: "absolute", top: -4, right: -4,
-                  background: "var(--red)", color: "#fff",
-                  width: 16, height: 16, borderRadius: "50%",
-                  fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center"
-                }}>
-                  {data.reminders.filter(r => r.date >= todayStr()).length}
-                </span>
+            {data.reminders.filter(r=>r.date>=todayStr()).length>0&&(
+              <button className="bell-btn" onClick={()=>setView("calendar")}>
+                🔔<span className="bell-count">{data.reminders.filter(r=>r.date>=todayStr()).length}</span>
               </button>
             )}
+            <div className="topbar-date">{new Date().toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"})}</div>
+            <div className="topbar-dot" style={{background:"#4ADE80",boxShadow:"0 0 8px #4ADE80"}}/>
           </div>
         </div>
 
+        {/* Quick add bar */}
+        {(view==="dashboard"||view==="brand")&&(
+          <div style={{background:"#EEF2FF",borderBottom:"1px solid #C7D2FE",padding:"8px 26px",display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
+            <span style={{fontFamily:"Martian Mono,monospace",fontSize:7.5,color:"#4F46E5",letterSpacing:2,textTransform:"uppercase",whiteSpace:"nowrap"}}>QUICK ADD</span>
+            <input className="inp" style={{flex:1,maxWidth:420,padding:"6px 12px",fontSize:12.5,background:"rgba(255,255,255,.7)",border:"1px solid #C7D2FE"}} placeholder={`New task${currentBrand?" for "+currentBrand.name:""}... press Enter to add`}
+              onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){addTask({title:e.target.value.trim(),priority:"medium",brand:activeBrand||"goldbet",tab:brandTab});e.target.value="";}}}/>
+            <button className="btn btn-primary btn-sm" onClick={()=>setShowTaskModal(true)}>+ Full Details</button>
+            <button className="btn btn-ai btn-sm" onClick={()=>setShowPinModal(true)}>📌 Note</button>
+            <button className="btn btn-ai btn-sm" onClick={()=>setShowReminderModal(true)}>🔔 Remind</button>
+          </div>
+        )}
+
         <div className="page-content">
-          {view === "dashboard" && renderDashboard()}
-          {view === "brand"     && renderBrand()}
-          {view === "analytics" && renderAnalytics()}
-          {view === "calendar"  && renderCalendar()}
-          {view === "pinboard"  && renderPinboard()}
-          {view === "ai"        && renderAI()}
+          {view==="dashboard"&&renderDashboard()}
+          {view==="timelog"&&renderTimeLog()}
+          {view==="brand"&&renderBrand()}
+          {view==="analytics"&&renderAnalytics()}
+          {view==="calendar"&&renderCalendar()}
+          {view==="pinboard"&&renderPinboard()}
+          {view==="ai"&&renderAI()}
         </div>
-      </main>
+      </div>
 
-      {/* ── MODALS ── */}
-      {modal === "task" && (
-        <AddTaskModal
-          onClose={() => setModal(null)}
-          onAdd={(t) => addTask(activeBrand, activeBrandTab, t)}
-          brandName={currentBrand?.name || ""}
-          tabName={activeBrandTab}
-        />
-      )}
-      {modal === "note" && (
-        <AddNoteModal onClose={() => setModal(null)} onAdd={addNote} />
-      )}
-      {modal?.type === "reminder" && (
-        <AddReminderModal onClose={() => setModal(null)} onAdd={addReminder} initDate={modal.date} />
-      )}
-
-      {/* ── TOASTS ── */}
-      <ToastContainer toasts={toasts} />
+      {showTaskModal&&<TaskModal onSave={addTask} onClose={()=>setShowTaskModal(false)} brandId={activeBrand} tab={brandTab} brands={BRANDS}/>}
+      {showPinModal&&<PinModal onSave={addNote} onClose={()=>setShowPinModal(false)}/>}
+      {showReminderModal&&<ReminderModal onSave={addReminder} onClose={()=>setShowReminderModal(false)} defaultDate={reminderDate}/>}
+      <ToastContainer toasts={toasts}/>
     </div>
   );
 }
