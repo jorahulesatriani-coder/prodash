@@ -1100,6 +1100,42 @@ function WeekPlanView({data,stats,bStats,acctData,setCommitment,weeklyReviews,se
 };
 
 
+function LiveClock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const time = now.toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit", second:"2-digit"});
+  const date = now.toLocaleDateString("en-GB", {weekday:"short", day:"numeric", month:"short", year:"numeric"});
+  return (
+    <div style={{textAlign:"right",lineHeight:1.2}}>
+      <div style={{fontFamily:"Martian Mono,monospace",fontSize:13,fontWeight:700,color:"var(--ink)",letterSpacing:1}}>{time}</div>
+      <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"var(--ink-4)",letterSpacing:.5,marginTop:1}}>{date}</div>
+    </div>
+  );
+}
+
+function LiveClockSmall() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const time = now.toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit"});
+  const date = now.toLocaleDateString("en-GB", {weekday:"short", day:"numeric", month:"short"});
+  return <span>{date} · {time}</span>;
+}
+
+function LiveDateLine() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return <>{now.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})} · {now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</>;
+}
+
 export default function App() {
   const [data,setData]            = useState(loadLocal);
   const [view,setView]            = useState("dashboard");
@@ -2034,7 +2070,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
     const urgentTasks=allTasks.filter(t=>!t.done&&t.priority==="urgent");
     const pendingTasks=allTasks.filter(t=>!t.done);
     const hour=new Date().getHours();
-    const greeting=hour<12?"Good morning":hour<17?"Good afternoon":"Good evening";
+    const greeting=hour<5?"Good night":hour<12?"Good morning":hour<18?"Good afternoon":hour<22?"Good evening":"Good night";
     const chartData=Array.from({length:7},(_,i)=>{
       const d=new Date(); d.setDate(d.getDate()-(6-i));
       const ds=d.toISOString().split("T")[0];
@@ -2054,10 +2090,10 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
         <div style={{marginBottom:20,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16}}>
           <div>
             <div style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:"var(--ink-4)",letterSpacing:2,textTransform:"uppercase",marginBottom:4}}>
-              {new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+              <LiveDateLine/>
             </div>
             <div style={{fontSize:26,fontWeight:700,color:"var(--ink)",lineHeight:1.1,letterSpacing:-0.5}}>
-              {hour<12?"Good morning":"Good afternoon"} ☀️
+              {greeting} {hour<5?"🌙":hour<12?"☀️":hour<18?"⛅":hour<22?"🌆":"🌙"}
             </div>
             <div style={{fontSize:13.5,color:"var(--ink-3)",marginTop:4}}>
               {pendingTasks.length} tasks pending · {overdueTasks.length>0?<span style={{color:"#DC2626",fontWeight:600}}>{overdueTasks.length} overdue</span>:"all on track"} · Score <strong>{score}</strong>
@@ -3211,7 +3247,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
             <span className="logo-text">PRODASH</span>
             <span className="logo-badge">LIVE</span>
           </div>
-          <div className="logo-date">{new Date().toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"})}</div>
+          <div className="logo-date"><LiveClockSmall/></div>
         </div>
         <div className="nav-section">
           <div className="nav-section-label">Navigate</div>
@@ -3298,7 +3334,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
             <button onClick={()=>setRadioMode(true)} title="PRODASH Radio — ambient focus mode" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>📻 Radio</button>
             <button onClick={()=>setShowWhatIf(true)} title="What-If Simulator" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>🔮 What-If</button>
             <button onClick={startVoice} title="Voice capture" style={{padding:"4px 10px",background:voiceActive?"rgba(220,38,38,.15)":"transparent",border:`1px solid ${voiceActive?"rgba(220,38,38,.5)":"var(--line)"}`,borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:voiceActive?"#DC2626":"var(--ink-3)",cursor:"pointer"}}>🎤 {voiceActive?"…":""}</button>
-            <div className="topbar-date">{new Date().toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"})}</div>
+            <LiveClock/>
             <div className="topbar-dot" style={{background:"#4ADE80",boxShadow:"0 0 8px #4ADE80"}}/>
           </div>
         </div>
