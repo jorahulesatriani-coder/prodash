@@ -1499,21 +1499,80 @@ export default function App() {
     }
   },[activeBrand,view]);
 
-  // ── Mood check-in: show once per day ──
-  useEffect(()=>{
-    const today=todayStr();
-    const todayEntry=loadMoods().find(m=>m.date===today);
-    if(!todayEntry){
-      const h=new Date().getHours();
-      if(h>=9&&h<20) setTimeout(()=>setShowMoodCheck(true), 3000);
-    } else {
-      setTodayMood(todayEntry.score);
-    }
-  // eslint-disable-next-line
-  },[]);
+  // Mood check-in removed
 
   // ── Streak save ──
   useEffect(()=>{ saveStreakLS(streak); },[streak]);
+
+  // ══════════════════════════════════════════
+  //  AUTO-AI ENGINE — reads data, self-improves
+  //  Runs on load + every 30 mins
+  // ══════════════════════════════════════════
+  const runAutoAI = useCallback(async () => {
+    const allTasks = Object.values(data.tasks).flat();
+    const overdue = allTasks.filter(t=>!t.done&&t.due&&t.due<todayStr());
+    const pending = allTasks.filter(t=>!t.done);
+    const doneToday = allTasks.filter(t=>t.done&&t.doneAt?.startsWith(todayStr()));
+    const brandData = BRANDS.map(b=>{
+      const bt = Object.entries(data.tasks).filter(([k])=>k.startsWith(b.id)).flatMap(([,v])=>v);
+      return `${b.name}: ${bt.filter(t=>!t.done).length} pending, ${bt.filter(t=>!t.done&&t.due&&t.due<todayStr()).length} overdue, ${bt.filter(t=>t.done).length} done`;
+    }).join(" | ");
+
+    const prompt = `You are the PRODASH AI engine. Analyse this real-time data and return smart insights.
+
+DATA:
+- Score: ${score}/100
+- Total pending: ${pending.length}, Overdue: ${overdue.length}, Done today: ${doneToday.length}
+- Brands: ${brandData}
+- Goals active: ${(data.goals||[]).filter(g=>!g.achieved).length}
+- Notes: ${data.notes.length}
+- Today: ${todayStr()} (${new Date().toLocaleDateString('en',{weekday:'long'})})
+
+Return ONLY a valid JSON object (no markdown, no explanation):
+{
+  "briefing": "2-sentence exec briefing, specific numbers, biggest risk right now",
+  "topPriority": "single most important task to do right now, be specific",
+  "alerts": ["alert 1 if critical issue exists", "alert 2 if needed"],
+  "brandInsight": "one sharp insight about brand performance pattern",
+  "suggestion": "one proactive suggestion to improve productivity today"
+}`;
+
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,messages:[{role:"user",content:prompt}]})
+      });
+      const json = await res.json();
+      const raw = json.content?.find(c=>c.type==="text")?.text||"";
+      const cleaned = raw.replace(/```json|```/g,"").trim();
+      const parsed = JSON.parse(cleaned);
+      setInsights(p=>({...p,
+        briefing: parsed.briefing||p.briefing,
+        autoTop: parsed.topPriority||"",
+        autoAlerts: parsed.alerts||[],
+        autoBrand: parsed.brandInsight||"",
+        autoSuggest: parsed.suggestion||""
+      }));
+    } catch(e) { /* silent fail */ }
+  }, [data, score, API_KEY]);
+
+  // Run auto-AI on first load (after 2s delay) + every 30 mins
+  useEffect(()=>{
+    const t1 = setTimeout(()=>runAutoAI(), 2000);
+    const t2 = setInterval(()=>runAutoAI(), 30*60*1000);
+    return ()=>{ clearTimeout(t1); clearInterval(t2); };
+  // eslint-disable-next-line
+  },[]);
+
+  // Re-run when score changes significantly
+  const prevScore = useRef(score);
+  useEffect(()=>{
+    if(Math.abs(score - prevScore.current) >= 5){
+      prevScore.current = score;
+      runAutoAI();
+    }
+  },[score, runAutoAI]);
 
   // ── Save score history daily ──
   useEffect(()=>{
@@ -2417,8 +2476,19 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
                 ?<div style={{color:"var(--ink-3)",fontSize:12.5,display:"flex",alignItems:"center",gap:8}}><span className="typing-dots"><span/><span/><span/></span> Analysing your situation...</div>
                 :insights["briefing"]
                   ?<div className="briefing-text">{insights["briefing"]}</div>
-                  :<div style={{color:"var(--ink-4)",fontSize:12.5,fontStyle:"italic"}}>Click Briefing to get your AI-powered daily summary</div>
+                  :insights["autoTop"]
+                    ?<div className="briefing-text">🤖 <strong>Top priority:</strong> {insights["autoTop"]}{insights["autoBrand"]&&<><br/><span style={{color:"var(--ink-3)"}}>📊 {insights["autoBrand"]}</span></>}{insights["autoSuggest"]&&<><br/><span style={{color:"var(--green)"}}>💡 {insights["autoSuggest"]}</span></>}</div>
+                    :<div style={{color:"var(--ink-4)",fontSize:12.5,display:"flex",alignItems:"center",gap:8}}><span className="typing-dots"><span/><span/><span/></span> AI analysing your data...</div>
               }
+              {insights["autoAlerts"]?.length>0&&(
+                <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:4}}>
+                  {insights["autoAlerts"].map((a,i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 10px",background:"rgba(220,38,38,.07)",border:"1px solid rgba(220,38,38,.2)",borderRadius:7,fontSize:12,color:"#DC2626"}}>
+                      <span>⚠</span><span>{a}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <div style={{marginTop:12,display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -2509,32 +2579,6 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
 
           {/* Right column: mood + quick stats */}
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
-
-            {/* Emotional check-in */}
-            <div className="card" style={{padding:"14px 16px"}}>
-              <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"var(--ink-4)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:10}}>HOW ARE YOU?</div>
-              {moodToday?(
-                <div style={{textAlign:"center"}}>
-                  <div style={{fontSize:32}}>{["😞","😕","😐","🙂","😊"][moodToday.score-1]}</div>
-                  <div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>Logged today</div>
-                  {avgMood&&<div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--ink-4)",marginTop:4}}>7-day avg: {avgMood}/5</div>}
-                </div>
-              ):(
-                <>
-                  <div style={{fontSize:11.5,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>Rate your energy today</div>
-                  <div style={{display:"flex",justifyContent:"space-between"}}>
-                    {[1,2,3,4,5].map(s=>(
-                      <button key={s} onClick={()=>{const updated=[...loadMoods().filter(m=>m.date!==today),{date:today,score:s,ts:nowISO()}];setMoods(updated);localStorage.setItem(MOOD_KEY,JSON.stringify(updated));showToast("Mood logged");}}
-                        style={{fontSize:22,background:"none",border:"none",cursor:"pointer",padding:4,borderRadius:8,transition:"transform .15s"}}
-                        onMouseEnter={e=>e.currentTarget.style.transform="scale(1.3)"}
-                        onMouseLeave={e=>e.currentTarget.style.transform=""}>
-                        {["😞","😕","😐","🙂","😊"][s-1]}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
 
             {/* Quick stats */}
             <div className="card" style={{padding:"14px 16px",flex:1}}>
@@ -3510,25 +3554,7 @@ SMART ALLOCATION RULES:
     <div className="app">
       {showConfetti&&<Confetti/>}
       {/* Mood check-in */}
-      {showMoodCheck&&!todayMood&&(
-        <div style={{position:"fixed",bottom:80,right:24,background:"var(--white)",border:"1px solid var(--line)",borderRadius:16,padding:"20px 24px",zIndex:200,boxShadow:"var(--s3)",width:280}}>
-          <button onClick={()=>setShowMoodCheck(false)} style={{position:"absolute",top:10,right:12,background:"none",border:"none",color:"var(--ink-4)",cursor:"pointer",fontSize:14}}>✕</button>
-          <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--ink-4)",letterSpacing:2,marginBottom:10,textTransform:"uppercase"}}>DAILY CHECK-IN</div>
-          <div style={{fontSize:14,fontWeight:600,color:"var(--ink)",marginBottom:14}}>How are you actually doing?</div>
-          <div style={{display:"flex",gap:8,justifyContent:"space-between"}}>
-            {[[1,"😓"],[2,"😐"],[3,"🙂"],[4,"😊"],[5,"🔥"]].map(([score,emoji])=>(
-              <button key={score} onClick={()=>saveMood(score)} style={{flex:1,padding:"10px 0",fontSize:20,border:"1px solid var(--line)",borderRadius:10,background:"var(--surface)",cursor:"pointer",transition:"all .15s"}}
-                onMouseEnter={e=>{e.currentTarget.style.background="var(--indigo)";e.currentTarget.style.borderColor="var(--indigo)";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="var(--surface)";e.currentTarget.style.borderColor="var(--line)";}}>
-                {emoji}
-              </button>
-            ))}
-          </div>
-          <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontFamily:"Martian Mono,monospace",fontSize:8,color:"var(--ink-4)"}}>
-            <span>tough</span><span>amazing</span>
-          </div>
-        </div>
-      )}
+      
       {/* Narrative modal */}
       {showNarrative&&(
         <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&setShowNarrative(false)}>
