@@ -1,3 +1,4 @@
+// PRODASH v8.1 — build:202603101209
 import { useState, useEffect, useRef, useCallback } from "react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid, Legend } from "recharts";
 
@@ -1504,88 +1505,8 @@ export default function App() {
   // ── Streak save ──
   useEffect(()=>{ saveStreakLS(streak); },[streak]);
 
-  // ══════════════════════════════════════════
-  //  AUTO-AI ENGINE — reads data, self-improves
-  //  Runs on load + every 30 mins
-  // ══════════════════════════════════════════
-  const runAutoAI = useCallback(async () => {
-    const allTasks = Object.values(data.tasks).flat();
-    const overdue = allTasks.filter(t=>!t.done&&t.due&&t.due<todayStr());
-    const pending = allTasks.filter(t=>!t.done);
-    const doneToday = allTasks.filter(t=>t.done&&t.doneAt?.startsWith(todayStr()));
-    const brandData = BRANDS.map(b=>{
-      const bt = Object.entries(data.tasks).filter(([k])=>k.startsWith(b.id)).flatMap(([,v])=>v);
-      return `${b.name}: ${bt.filter(t=>!t.done).length} pending, ${bt.filter(t=>!t.done&&t.due&&t.due<todayStr()).length} overdue, ${bt.filter(t=>t.done).length} done`;
-    }).join(" | ");
 
-    const prompt = `You are the PRODASH AI engine. Analyse this real-time data and return smart insights.
-
-DATA:
-- Score: ${score}/100
-- Total pending: ${pending.length}, Overdue: ${overdue.length}, Done today: ${doneToday.length}
-- Brands: ${brandData}
-- Goals active: ${(data.goals||[]).filter(g=>!g.achieved).length}
-- Notes: ${data.notes.length}
-- Today: ${todayStr()} (${new Date().toLocaleDateString('en',{weekday:'long'})})
-
-Return ONLY a valid JSON object (no markdown, no explanation):
-{
-  "briefing": "2-sentence exec briefing, specific numbers, biggest risk right now",
-  "topPriority": "single most important task to do right now, be specific",
-  "alerts": ["alert 1 if critical issue exists", "alert 2 if needed"],
-  "brandInsight": "one sharp insight about brand performance pattern",
-  "suggestion": "one proactive suggestion to improve productivity today"
-}`;
-
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,messages:[{role:"user",content:prompt}]})
-      });
-      const json = await res.json();
-      const raw = json.content?.find(c=>c.type==="text")?.text||"";
-      const cleaned = raw.replace(/```json|```/g,"").trim();
-      const parsed = JSON.parse(cleaned);
-      setInsights(p=>({...p,
-        briefing: parsed.briefing||p.briefing,
-        autoTop: parsed.topPriority||"",
-        autoAlerts: parsed.alerts||[],
-        autoBrand: parsed.brandInsight||"",
-        autoSuggest: parsed.suggestion||""
-      }));
-    } catch(e) { /* silent fail */ }
-  }, [data, score, API_KEY]);
-
-  // Run auto-AI on first load (after 2s delay) + every 30 mins
-  useEffect(()=>{
-    const t1 = setTimeout(()=>runAutoAI(), 2000);
-    const t2 = setInterval(()=>runAutoAI(), 30*60*1000);
-    return ()=>{ clearTimeout(t1); clearInterval(t2); };
-  // eslint-disable-next-line
-  },[]);
-
-  // Re-run when score changes significantly
-  const prevScore = useRef(score);
-  useEffect(()=>{
-    if(Math.abs(score - prevScore.current) >= 5){
-      prevScore.current = score;
-      runAutoAI();
-    }
-  },[score, runAutoAI]);
-
-  // ── Save score history daily ──
-  useEffect(()=>{
-    const today=todayStr();
-    const hist=loadScoreHist();
-    const last=hist[hist.length-1];
-    if(!last||last.date!==today){
-      const s=getScore();
-      const newHist=[...hist,{date:today,score:s}].slice(-90);
-      setScoreHistory(newHist); saveScoreHist(newHist);
-    }
-  // eslint-disable-next-line
-  },[]);
+  // score history effect moved below
 
   // ── Morning prompt: "yesterday I meant to..." ──
   useEffect(()=>{
@@ -1860,6 +1781,94 @@ Return ONLY a valid JSON object (no markdown, no explanation):
     sc+=(bs.filter(b=>b.tasks>0).length/BRANDS.length)*15;
     return Math.round(Math.min(100,sc));
   },[getStats,getBrandStats]);
+
+  // ══════════════════════════════════════════
+  //  AUTO-AI ENGINE — reads data, self-improves
+  //  Runs on load + every 30 mins
+  // ══════════════════════════════════════════
+  const runAutoAI = useCallback(async () => {
+    const allTasks = Object.values(data.tasks).flat();
+    const overdue = allTasks.filter(t=>!t.done&&t.due&&t.due<todayStr());
+    const pending = allTasks.filter(t=>!t.done);
+    const doneToday = allTasks.filter(t=>t.done&&t.doneAt?.startsWith(todayStr()));
+    const brandData = BRANDS.map(b=>{
+      const bt = Object.entries(data.tasks).filter(([k])=>k.startsWith(b.id)).flatMap(([,v])=>v);
+      return `${b.name}: ${bt.filter(t=>!t.done).length} pending, ${bt.filter(t=>!t.done&&t.due&&t.due<todayStr()).length} overdue, ${bt.filter(t=>t.done).length} done`;
+    }).join(" | ");
+    const currentScore = getScore();
+
+    const prompt = `You are the PRODASH AI engine. Analyse this real-time data and return smart insights.
+
+DATA:
+- Score: ${currentScore}/100
+- Total pending: ${pending.length}, Overdue: ${overdue.length}, Done today: ${doneToday.length}
+- Brands: ${brandData}
+- Goals active: ${(data.goals||[]).filter(g=>!g.achieved).length}
+- Notes: ${(data.notes||[]).length}
+- Today: ${todayStr()} (${new Date().toLocaleDateString('en-AU',{weekday:'long'})})
+
+Return ONLY a valid JSON object (no markdown, no explanation):
+{
+  "briefing": "2-sentence exec briefing, specific numbers, biggest risk right now",
+  "topPriority": "single most important task to do right now, be specific",
+  "alerts": ["alert 1 if critical issue exists", "alert 2 if needed"],
+  "brandInsight": "one sharp insight about brand performance pattern",
+  "suggestion": "one proactive suggestion to improve productivity today"
+}`;
+
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,messages:[{role:"user",content:prompt}]})
+      });
+      const json = await res.json();
+      const raw = json.content?.find(c=>c.type==="text")?.text||"";
+      const cleaned = raw.replace(/```json|```/g,"").trim();
+      const parsed = JSON.parse(cleaned);
+      setInsights(p=>({...p,
+        briefing: parsed.briefing||p.briefing,
+        autoTop: parsed.topPriority||"",
+        autoAlerts: parsed.alerts||[],
+        autoBrand: parsed.brandInsight||"",
+        autoSuggest: parsed.suggestion||""
+      }));
+    } catch(e) { /* silent fail */ }
+  }, [data, score, API_KEY]);
+
+  // Run auto-AI on first load (after 2s delay) + every 30 mins
+  useEffect(()=>{
+    const t1 = setTimeout(()=>runAutoAI(), 2000);
+    const t2 = setInterval(()=>runAutoAI(), 30*60*1000);
+    return ()=>{ clearTimeout(t1); clearInterval(t2); };
+  // eslint-disable-next-line
+  },[]);
+
+  // Re-run when score changes significantly
+  const prevScore = useRef(0);
+  useEffect(()=>{
+    const s = getScore();
+    if(Math.abs(s - prevScore.current) >= 5){
+      prevScore.current = s;
+      runAutoAI();
+    }
+  // eslint-disable-next-line
+  },[data, runAutoAI]);
+
+  // ── Save score history daily (after getScore is defined) ──
+  useEffect(()=>{
+    const today=todayStr();
+    const hist=loadScoreHist();
+    const last=hist[hist.length-1];
+    if(!last||last.date!==today){
+      const s=getScore();
+      const newHist=[...hist,{date:today,score:s}].slice(-90);
+      setScoreHistory(newHist); saveScoreHist(newHist);
+    }
+  // eslint-disable-next-line
+  },[]);
+
+  // ── Save score history daily ──
 
   // ── CRUD ──
   const addTask=useCallback((form)=>{
