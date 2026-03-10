@@ -12,7 +12,7 @@ const BRANDS = [
   {id:"betgold", name:"BetGold", color:"#C2410C",bg:"#FFF7ED",emoji:"💰"},
   {id:"techdev", name:"TechDev", color:"#1E40AF",bg:"#EFF6FF",emoji:"💻"},
 ];
-const BRAND_TABS  = ["Reporting","Compliance","Accounting"];
+const BRAND_TABS  = ["Reporting","Compliance","Accounting","Miscellaneous"];
 const PRIORITIES  = [{key:"low",label:"Low"},{key:"medium",label:"Medium"},{key:"high",label:"High"},{key:"urgent",label:"Urgent"}];
 const CATEGORIES  = ["Reporting","Compliance","Accounting","Payroll"];
 const RECURRENCE  = [{key:"",label:"None"},{key:"daily",label:"Daily"},{key:"weekly",label:"Weekly"},{key:"monthly",label:"Monthly"}];
@@ -49,6 +49,9 @@ const fmtSecs = s => { const m=Math.floor(s/60),ss=s%60; return String(m).padSta
 const loadStreak = () => { try{return JSON.parse(localStorage.getItem("prodash_streak")||"{}")||{};}catch{return{};} };
 const saveStreakLS = s => localStorage.setItem("prodash_streak", JSON.stringify(s));
 const SCORE_HIST_KEY = "prodash_score_hist";
+const PA_CHAT_KEY    = "prodash_pa_chat";
+const loadPAChat     = () => { try{return JSON.parse(localStorage.getItem(PA_CHAT_KEY)||"[]");}catch{return[];} };
+const savePAChat     = (c) => { try{localStorage.setItem(PA_CHAT_KEY,JSON.stringify(c.slice(-100)));}catch{} };
 const loadScoreHist  = () => { try{return JSON.parse(localStorage.getItem(SCORE_HIST_KEY)||"[]");}catch{return[];} };
 const saveScoreHist  = h => { try{localStorage.setItem(SCORE_HIST_KEY,JSON.stringify(h));}catch{} };
 const WEEKLY_KEY     = "prodash_weekly";
@@ -71,6 +74,7 @@ const NAV_ITEMS = [
   {id:"journal",  icon:"📖",label:"Work Journal"},
   {id:"goals",    icon:"🎯",label:"Goals"},
   {id:"decisions",icon:"⚖",label:"Decision Log"},
+  {id:"pa",       icon:"🤖",label:"PA Assistant"},
   {id:"braindump",icon:"⚡",label:"Brain Dump"},
   {id:"weekplan", icon:"📅",label:"Weekly Plan"},
 ];
@@ -1136,6 +1140,221 @@ function LiveDateLine() {
   return <>{now.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})} · {now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</>;
 }
 
+
+// ══════════════════════════════════════════════════════════
+//  PA VIEW COMPONENT
+// ══════════════════════════════════════════════════════════
+function PAView({ paChat, paLoading, sendToPA, setPaChat, bStats, stats, score, data, setView, setActiveBrand, setBrandTab }) {
+  const [input, setInput] = useState("");
+  const [inputRows, setInputRows] = useState(1);
+  const bottomRef = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [paChat, paLoading]);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const send = () => {
+    const msg = input.trim();
+    if (!msg || paLoading) return;
+    setInput("");
+    setInputRows(1);
+    sendToPA(msg);
+  };
+
+  const suggestions = [
+    "Add a compliance task for Goldbet due Friday",
+    "Remind me to check Ultrabet reports tomorrow at 9am",
+    "What should I focus on today?",
+    "Create a goal to improve Goldbet compliance by end of month",
+    "Log a decision: we're switching Ultrabet to monthly reporting",
+    "Add urgent task: review BoostBet licence renewal for Compliance",
+    "What's the status of all my brands?",
+    "I need to do payslips for all brands this week",
+  ];
+
+  const allTasks = Object.values(data.tasks).flat();
+  const overdueCount = allTasks.filter(t => !t.done && t.due && t.due < todayStr()).length;
+
+  return (
+    <div className="anim-up" style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 120px)", maxWidth: 860, margin: "0 auto" }}>
+
+      {/* Header */}
+      <div style={{ marginBottom: 16, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg,#4F46E5,#7C3AED)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, boxShadow: "0 4px 14px rgba(79,70,229,.35)" }}>🤖</div>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "var(--ink)", letterSpacing: -0.5 }}>PRODASH PA</div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Your AI personal assistant — tell me anything</div>
+          </div>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            <div style={{ padding: "5px 12px", background: score >= 70 ? "var(--green-lt)" : "var(--amber-lt)", borderRadius: 99, fontFamily: "Martian Mono,monospace", fontSize: 10, fontWeight: 600, color: score >= 70 ? "#059669" : "#D97706" }}>◎ {score}</div>
+            {overdueCount > 0 && <div style={{ padding: "5px 12px", background: "var(--red-lt)", borderRadius: 99, fontFamily: "Martian Mono,monospace", fontSize: 10, fontWeight: 600, color: "#DC2626" }}>🔥 {overdueCount} overdue</div>}
+          </div>
+        </div>
+
+        {/* Quick stats strip */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {bStats.slice(0, 6).map(b => (
+            <div key={b.id} onClick={() => { setActiveBrand(b.id); setView("brand"); }}
+              style={{ padding: "4px 10px", background: b.color + "14", border: `1px solid ${b.color}30`, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ fontSize: 11 }}>{b.emoji}</span>
+              <span style={{ fontFamily: "Martian Mono,monospace", fontSize: 8.5, fontWeight: 600, color: b.color }}>{b.name}</span>
+              <span style={{ fontFamily: "Martian Mono,monospace", fontSize: 8, color: "var(--ink-4)" }}>{b.rate}%</span>
+              {b.overdue > 0 && <span style={{ fontSize: 8, color: "#DC2626", fontWeight: 700 }}>▲{b.overdue}</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Chat area */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "4px 0 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+
+        {/* Empty state */}
+        {paChat.length === 0 && (
+          <div style={{ textAlign: "center", padding: "40px 20px" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🤖</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)", marginBottom: 6 }}>Hi! I'm your PRODASH PA</div>
+            <div style={{ fontSize: 13, color: "var(--ink-3)", maxWidth: 480, margin: "0 auto 24px", lineHeight: 1.7 }}>
+              Tell me anything — tasks, ideas, reminders, decisions. I know all your brands and I'll automatically put everything in the right place.
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", maxWidth: 600, margin: "0 auto" }}>
+              {suggestions.map((s, i) => (
+                <button key={i} onClick={() => { setInput(s); inputRef.current?.focus(); }}
+                  style={{ padding: "8px 14px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, fontSize: 12, color: "var(--ink-3)", cursor: "pointer", textAlign: "left", transition: "all .15s" }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "var(--ai-bg)"; e.currentTarget.style.borderColor = "var(--indigo)"; e.currentTarget.style.color = "var(--ink)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "var(--surface)"; e.currentTarget.style.borderColor = "var(--line)"; e.currentTarget.style.color = "var(--ink-3)"; }}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Messages */}
+        {paChat.map((msg, i) => (
+          <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", flexDirection: msg.role === "user" ? "row-reverse" : "row" }}>
+
+            {/* Avatar */}
+            <div style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, background: msg.role === "user" ? "var(--blue)" : "linear-gradient(135deg,#4F46E5,#7C3AED)", boxShadow: "0 2px 8px rgba(0,0,0,.1)" }}>
+              {msg.role === "user" ? "👤" : "🤖"}
+            </div>
+
+            {/* Bubble */}
+            <div style={{ maxWidth: "75%", minWidth: 0 }}>
+              <div style={{
+                padding: "12px 16px",
+                borderRadius: msg.role === "user" ? "16px 4px 16px 16px" : "4px 16px 16px 16px",
+                background: msg.role === "user" ? "linear-gradient(135deg,#2563EB,#4F46E5)" : "var(--white)",
+                color: msg.role === "user" ? "#fff" : "var(--ink)",
+                border: msg.role === "user" ? "none" : "1px solid var(--line)",
+                fontSize: 13.5,
+                lineHeight: 1.65,
+                boxShadow: "0 2px 8px rgba(0,0,0,.06)",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word"
+              }}>
+                {msg.content}
+              </div>
+
+              {/* Action summary */}
+              {msg.actionSummary && (
+                <div style={{ marginTop: 6, padding: "6px 12px", background: "var(--green-lt)", border: "1px solid #A7F3D0", borderRadius: 8, fontSize: 11.5, color: "#059669", fontWeight: 500 }}>
+                  {msg.actionSummary}
+                </div>
+              )}
+
+              {/* Task cards created */}
+              {msg.actions?.tasks?.length > 0 && (
+                <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                  {msg.actions.tasks.map((t, ti) => {
+                    const brand = BRANDS.find(b => b.id === t.brand);
+                    return (
+                      <div key={ti} onClick={() => { if (brand) { setActiveBrand(brand.id); setBrandTab(t.tab || "Miscellaneous"); setView("brand"); } }}
+                        style={{ padding: "7px 12px", background: brand ? brand.color + "10" : "var(--surface)", border: `1px solid ${brand ? brand.color + "30" : "var(--line)"}`, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, transition: "all .12s" }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = ".8"}
+                        onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                        <span style={{ fontSize: 14 }}>{brand?.emoji || "✅"}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: brand?.color || "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
+                          <div style={{ fontFamily: "Martian Mono,monospace", fontSize: 8.5, color: "var(--ink-4)", marginTop: 1 }}>{brand?.name} · {t.tab} · {t.priority}</div>
+                        </div>
+                        {t.due && (() => { const db = dueBadge(t.due); return db ? <span style={{ fontFamily: "Martian Mono,monospace", fontSize: 8.5, fontWeight: 600, color: db.color, background: db.bg, padding: "2px 7px", borderRadius: 99 }}>{db.label}</span> : null; })()}
+                        <span style={{ fontFamily: "Martian Mono,monospace", fontSize: 8, color: "var(--ink-4)" }}>→</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div style={{ fontFamily: "Martian Mono,monospace", fontSize: 7.5, color: "var(--ink-5)", marginTop: 4, textAlign: msg.role === "user" ? "right" : "left" }}>
+                {fmtTime(msg.ts)}
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* Loading */}
+        {paLoading && (
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <div style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, background: "linear-gradient(135deg,#4F46E5,#7C3AED)" }}>🤖</div>
+            <div style={{ padding: "12px 16px", borderRadius: "4px 16px 16px 16px", background: "var(--white)", border: "1px solid var(--line)", boxShadow: "0 2px 8px rgba(0,0,0,.06)" }}>
+              <span className="typing-dots"><span/><span/><span/></span>
+            </div>
+          </div>
+        )}
+
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input area */}
+      <div style={{ flexShrink: 0, padding: "12px 0 4px", borderTop: "1px solid var(--line)" }}>
+        {paChat.length > 0 && (
+          <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+            {["What should I focus on now?", "Any urgent items?", "Summarise my week", "Clear all overdue tasks"].map((s, i) => (
+              <button key={i} onClick={() => sendToPA(s)}
+                style={{ padding: "4px 12px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 99, fontSize: 11.5, color: "var(--ink-3)", cursor: "pointer" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "var(--ai-bg)"; e.currentTarget.style.color = "var(--ink)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "var(--surface)"; e.currentTarget.style.color = "var(--ink-3)"; }}>
+                {s}
+              </button>
+            ))}
+            <button onClick={() => { if (window.confirm("Clear chat history?")) { setPaChat([]); savePAChat([]); } }}
+              style={{ padding: "4px 12px", background: "none", border: "1px solid var(--line)", borderRadius: 99, fontSize: 11.5, color: "var(--ink-4)", cursor: "pointer", marginLeft: "auto" }}>
+              Clear chat
+            </button>
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-end", background: "var(--white)", border: "2px solid var(--ai-border)", borderRadius: 16, padding: "8px 12px", boxShadow: "0 4px 20px rgba(79,70,229,.1)", transition: "border-color .2s" }}
+          onFocusCapture={e => e.currentTarget.style.borderColor = "var(--indigo)"}
+          onBlurCapture={e => e.currentTarget.style.borderColor = "var(--ai-border)"}>
+          <textarea ref={inputRef}
+            value={input}
+            onChange={e => { setInput(e.target.value); const lines = e.target.value.split("\n").length; setInputRows(Math.min(lines, 5)); }}
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+            placeholder="Tell me what to do... e.g. 'Add compliance task for Goldbet due Friday, high priority' or ask me anything"
+            rows={inputRows}
+            style={{ flex: 1, border: "none", outline: "none", resize: "none", fontSize: 13.5, color: "var(--ink)", background: "transparent", fontFamily: "Inter,sans-serif", lineHeight: 1.55, padding: 0 }}
+          />
+          <button onClick={send} disabled={!input.trim() || paLoading}
+            style={{ width: 38, height: 38, borderRadius: 10, background: input.trim() && !paLoading ? "linear-gradient(135deg,#4F46E5,#7C3AED)" : "var(--surface)", border: "none", cursor: input.trim() && !paLoading ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0, transition: "all .2s", boxShadow: input.trim() && !paLoading ? "0 2px 10px rgba(79,70,229,.3)" : "none" }}>
+            {paLoading ? <span className="typing-dots" style={{ transform: "scale(.7)" }}><span/><span/><span/></span> : "↑"}
+          </button>
+        </div>
+        <div style={{ fontFamily: "Martian Mono,monospace", fontSize: 8, color: "var(--ink-5)", textAlign: "center", marginTop: 6 }}>
+          Enter to send · Shift+Enter for new line · I can create tasks, reminders, notes, goals and decisions
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 export default function App() {
   const [data,setData]            = useState(loadLocal);
   const [view,setView]            = useState("dashboard");
@@ -1175,6 +1394,8 @@ export default function App() {
   const [showTemplates,setShowTemplates] = useState(false);
   const [streak,setStreak]         = useState(loadStreak);
   const [scoreHistory,setScoreHistory]         = useState(loadScoreHist);
+  const [paChat,setPaChat]                     = useState(loadPAChat);
+  const [paLoading,setPaLoading]               = useState(false);
   const [moods,setMoods]                       = useState(loadMoods);
   const [showMoodCheck,setShowMoodCheck]       = useState(false);
   const [todayMood,setTodayMood]               = useState(null);
@@ -2951,6 +3172,170 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
 
   const renderDecisions=()=><DecisionsView data={data} addDecision={addDecision} deleteDecision={deleteDecision} showToast={showToast} fetchInsight={fetchInsight} insightLoading={insightLoading} insights={insights}/>;
 
+
+  // ══════════════════════════════════════════════════════════
+  //  PA — PERSONAL ASSISTANT
+  // ══════════════════════════════════════════════════════════
+  const sendToPA = useCallback(async (userMsg) => {
+    if (!userMsg.trim()) return;
+    const now = nowISO();
+    const userBubble = { role: "user", content: userMsg, ts: now };
+    const newHistory = [...paChat, userBubble];
+    setPaChat(newHistory);
+    savePAChat(newHistory);
+    setPaLoading(true);
+
+    // Build rich context for the AI
+    const allTasks = Object.values(data.tasks).flat();
+    const brandSummary = BRANDS.map(b => {
+      const tasks = Object.entries(data.tasks)
+        .filter(([k]) => k.startsWith(b.id))
+        .flatMap(([,v]) => v);
+      const pending = tasks.filter(t => !t.done).length;
+      const overdue = tasks.filter(t => !t.done && t.due && t.due < todayStr()).length;
+      return `${b.name}(${b.id}): ${pending} pending, ${overdue} overdue`;
+    }).join(" | ");
+
+    const recentGoals = (data.goals || []).filter(g => !g.achieved).slice(0, 5).map(g => g.title).join(", ");
+    const pendingTasks = allTasks.filter(t => !t.done).slice(0, 10).map(t => `"${t.title}"[${t.brand||"?"}]`).join(", ");
+    const conversationHistory = newHistory.slice(-10).map(m => ({ role: m.role, content: m.content }));
+
+    const systemPrompt = `You are PRODASH PA — a hyper-intelligent personal assistant for someone managing 6 betting/gaming brands: Goldbet, Ultrabet, BoostBet, AllBets, BetGold, TechDev.
+
+CURRENT STATE:
+- Brands: ${brandSummary}
+- Active goals: ${recentGoals || "none"}
+- Recent pending tasks: ${pendingTasks || "none"}
+- Today: ${todayStr()}
+- PRODASH score: ${score}/100
+
+BRANDS (for allocation):
+- goldbet = Goldbet 🥇 (amber)
+- ultrabet = Ultrabet ⚡ (purple)  
+- boostbet = BoostBet 🚀 (red)
+- allbets = AllBets 🎯 (green)
+- betgold = BetGold 💰 (orange)
+- techdev = TechDev 💻 (blue)
+
+TABS per brand: Reporting, Compliance, Accounting, Miscellaneous
+
+YOUR JOB:
+1. Understand what the user wants — they may tell you tasks, instructions, questions, or anything
+2. Act on it: create tasks, reminders, notes, goals, or decisions
+3. Always respond conversationally FIRST, then include a JSON actions block
+4. Be their trusted chief of staff — proactive, direct, smart
+
+RESPONSE FORMAT — always end with this exact block (even if empty):
+<actions>
+{
+  "tasks": [
+    {"title": "task title", "brand": "brandid", "tab": "Reporting|Compliance|Accounting|Miscellaneous", "priority": "urgent|high|medium|low", "due": "YYYY-MM-DD or empty", "note": "optional note", "estimatedMins": 30}
+  ],
+  "reminders": [
+    {"title": "reminder title", "date": "YYYY-MM-DD", "time": "HH:MM", "brand": "brandid or empty", "note": ""}
+  ],
+  "notes": [
+    {"title": "note title", "content": "full note content", "color": "#FFF9C4"}
+  ],
+  "goals": [
+    {"title": "goal title", "description": "details", "brand": "brandid", "targetDate": "YYYY-MM-DD"}
+  ],
+  "decisions": [
+    {"title": "decision title", "context": "why", "decision": "what was decided", "reasoning": "rationale", "brand": "brandid"}
+  ],
+  "reply": "your conversational reply to the user"
+}
+</actions>
+
+SMART ALLOCATION RULES:
+- If user mentions "compliance", "licence", "regulatory" → tab: Compliance
+- If user mentions "report", "numbers", "KPIs", "data" → tab: Reporting
+- If user mentions "invoice", "payment", "salary", "accounting" → tab: Accounting
+- If unclear or general → tab: Miscellaneous
+- Match brand by name/context clues. If truly unknown → brand: "goldbet", tab: "Miscellaneous"
+- Always set a sensible priority based on urgency words
+- Always be helpful — if they ask a question, answer it AND create relevant tasks if appropriate`;
+
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": API_KEY,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 2000,
+          system: systemPrompt,
+          messages: conversationHistory
+        })
+      });
+      const json = await res.json();
+      const rawText = json.content?.filter(c => c.type === "text").map(c => c.text).join("") || "";
+
+      // Parse the actions block
+      let actions = { tasks: [], reminders: [], notes: [], goals: [], decisions: [], reply: rawText };
+      const actionsMatch = rawText.match(/<actions>([\s\S]*?)<\/actions>/);
+      if (actionsMatch) {
+        try {
+          const parsed = JSON.parse(actionsMatch[1].trim());
+          actions = { ...actions, ...parsed };
+          actions.reply = parsed.reply || rawText.replace(/<actions>[\s\S]*?<\/actions>/, "").trim();
+        } catch(e) {
+          actions.reply = rawText.replace(/<actions>[\s\S]*?<\/actions>/, "").trim();
+        }
+      }
+
+      // Execute all actions
+      let taskCount = 0, reminderCount = 0, noteCount = 0, goalCount = 0, decisionCount = 0;
+
+      (actions.tasks || []).forEach(t => {
+        if (t.title) { addTask({ title: t.title, brand: t.brand || "goldbet", tab: t.tab || "Miscellaneous", priority: t.priority || "medium", due: t.due || "", note: t.note || "", estimatedMins: t.estimatedMins || null }); taskCount++; }
+      });
+      (actions.reminders || []).forEach(r => {
+        if (r.title && r.date) { addReminder({ title: r.title, date: r.date, time: r.time || "09:00", brand: r.brand || "", note: r.note || "" }); reminderCount++; }
+      });
+      (actions.notes || []).forEach(n => {
+        if (n.content) { addNote({ title: n.title || "", content: n.content, color: n.color || "#FFF9C4" }); noteCount++; }
+      });
+      (actions.goals || []).forEach(g => {
+        if (g.title) { addGoal({ title: g.title, description: g.description || "", brand: g.brand || "", targetDate: g.targetDate || "" }); goalCount++; }
+      });
+      (actions.decisions || []).forEach(d => {
+        if (d.title) { addDecision({ title: d.title, context: d.context || "", decision: d.decision || "", reasoning: d.reasoning || "", brand: d.brand || "" }); decisionCount++; }
+      });
+
+      // Build action summary
+      const actionParts = [];
+      if (taskCount) actionParts.push(`✅ ${taskCount} task${taskCount > 1 ? "s" : ""} added`);
+      if (reminderCount) actionParts.push(`🔔 ${reminderCount} reminder${reminderCount > 1 ? "s" : ""} set`);
+      if (noteCount) actionParts.push(`📌 ${noteCount} note${noteCount > 1 ? "s" : ""} saved`);
+      if (goalCount) actionParts.push(`🎯 ${goalCount} goal${goalCount > 1 ? "s" : ""} created`);
+      if (decisionCount) actionParts.push(`⚖ ${decisionCount} decision${decisionCount > 1 ? "s" : ""} logged`);
+
+      const aiBubble = {
+        role: "assistant",
+        content: actions.reply,
+        ts: nowISO(),
+        actions: actions,
+        actionSummary: actionParts.join(" · ") || null
+      };
+      const finalHistory = [...newHistory, aiBubble];
+      setPaChat(finalHistory);
+      savePAChat(finalHistory);
+    } catch(e) {
+      const errBubble = { role: "assistant", content: "Sorry, I couldn't connect. Please try again.", ts: nowISO() };
+      const finalHistory = [...newHistory, errBubble];
+      setPaChat(finalHistory);
+      savePAChat(finalHistory);
+    }
+    setPaLoading(false);
+  }, [paChat, data, score, addTask, addNote, addReminder, addGoal, addDecision, API_KEY, showToast]);
+
+  const renderPA = () => <PAView paChat={paChat} paLoading={paLoading} sendToPA={sendToPA} setPaChat={setPaChat} bStats={bStats} stats={stats} score={score} data={data} setView={setView} setActiveBrand={setActiveBrand} setBrandTab={setBrandTab} />;
+
   const renderWeekPlan=()=><WeekPlanView data={data} stats={stats} bStats={bStats} acctData={acctData} setCommitment={setCommitment} weeklyReviews={weeklyReviews} setWeeklyReviews={setWeeklyReviews} showToast={showToast} setActiveBrand={setActiveBrand} setBrandTab={setBrandTab} setView={setView}/>;
 
   const renderAI=()=>(
@@ -3364,6 +3749,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
           {view==="journal"  &&renderJournal()}
           {view==="goals"    &&renderGoals()}
           {view==="decisions"&&renderDecisions()}
+          {view==="pa"        &&renderPA()}
           {view==="braindump"&&renderBrainDump()}
           {view==="weekplan" &&renderWeekPlan()}
         </div>
@@ -3382,8 +3768,8 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
           <span style={{fontSize:26,lineHeight:1,background:"var(--blue)",color:"#fff",borderRadius:"50%",width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",marginTop:-12,boxShadow:"0 4px 14px rgba(37,99,235,.4)"}}>+</span>
           <span>Add</span>
         </button>
-        <button className={`mob-nav-btn${view==="ai"?" active":""}`} onClick={()=>{setView("ai");setActiveBrand(null);}}>
-          <span>◎</span><span>AI</span>
+        <button className={`mob-nav-btn${view==="pa"?" active":""}`} onClick={()=>{setView("pa");setActiveBrand(null);}}>
+          <span>🤖</span><span>PA</span>
         </button>
         <button className="mob-nav-btn" onClick={()=>setSidebarOpen(true)}>
           <span>☰</span><span>More</span>
