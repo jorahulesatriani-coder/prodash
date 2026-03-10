@@ -1851,7 +1851,7 @@ Return ONLY a valid JSON object (no markdown, no explanation):
         autoSuggest: parsed.suggestion||""
       }));
     } catch(e) { /* silent fail */ }
-  }, [data, score, API_KEY]);
+  }, [data, API_KEY]);
 
   // Run auto-AI on first load (after 2s delay) + every 30 mins
   useEffect(()=>{
