@@ -972,3 +972,17 @@ input[type="range"]::-webkit-slider-thumb {
     .float-capture { bottom: calc(72px + env(safe-area-inset-bottom)) !important; }
   }
 }
+
+/* ── PA CHAT ── */
+.typing-dots { display: inline-flex; gap: 3px; align-items: center; padding: 2px 0; }
+.typing-dots span {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--ink-3); display: inline-block;
+  animation: typing-bounce .9s ease infinite;
+}
+.typing-dots span:nth-child(2) { animation-delay: .15s; }
+.typing-dots span:nth-child(3) { animation-delay: .3s; }
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: .4; }
+  30% { transform: translateY(-6px); opacity: 1; }
+}
