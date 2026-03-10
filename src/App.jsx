@@ -1355,6 +1355,26 @@ function PAView({ paChat, paLoading, sendToPA, setPaChat, bStats, stats, score, 
 }
 
 
+function QuickPAInput({ onSend, onExpand }) {
+  const [val, setVal] = useState("");
+  return (
+    <div>
+      <textarea className="ta" style={{minHeight:72,fontSize:13,marginBottom:8,borderRadius:10}}
+        placeholder="e.g. Add compliance task for Goldbet due Friday..."
+        autoFocus value={val} onChange={e=>setVal(e.target.value)}
+        onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();if(val.trim()){onSend(val.trim());}}}}/>
+      <div style={{display:"flex",gap:6}}>
+        <button className="btn btn-primary btn-xs flex1" style={{background:"linear-gradient(135deg,#4F46E5,#7C3AED)",border:"none"}}
+          onClick={()=>{if(val.trim()) onSend(val.trim()); else onExpand();}}>
+          🤖 {val.trim()?"Send to PA":"Open PA"}
+        </button>
+        <button className="btn btn-ghost btn-xs" onClick={onExpand}>Full PA →</button>
+      </div>
+      <div style={{fontSize:9.5,color:"var(--ink-4)",marginTop:5,lineHeight:1.4}}>Enter to send · I'll allocate tasks automatically</div>
+    </div>
+  );
+}
+
 export default function App() {
   const [data,setData]            = useState(loadLocal);
   const [view,setView]            = useState("dashboard");
@@ -3275,24 +3295,45 @@ SMART ALLOCATION RULES:
       const json = await res.json();
       const rawText = json.content?.filter(c => c.type === "text").map(c => c.text).join("") || "";
 
-      // Parse the actions block
-      let actions = { tasks: [], reminders: [], notes: [], goals: [], decisions: [], reply: rawText };
+      // Parse the actions block - robust multi-attempt parsing
+      let actions = { tasks: [], reminders: [], notes: [], goals: [], decisions: [], reply: "" };
+      let replyText = rawText;
+
+      // Try <actions> block first
       const actionsMatch = rawText.match(/<actions>([\s\S]*?)<\/actions>/);
       if (actionsMatch) {
+        replyText = rawText.replace(/<actions>[\s\S]*?<\/actions>/, "").trim();
         try {
           const parsed = JSON.parse(actionsMatch[1].trim());
-          actions = { ...actions, ...parsed };
-          actions.reply = parsed.reply || rawText.replace(/<actions>[\s\S]*?<\/actions>/, "").trim();
+          actions = { tasks: parsed.tasks||[], reminders: parsed.reminders||[], notes: parsed.notes||[], goals: parsed.goals||[], decisions: parsed.decisions||[], reply: parsed.reply||replyText };
+          replyText = actions.reply || replyText;
         } catch(e) {
-          actions.reply = rawText.replace(/<actions>[\s\S]*?<\/actions>/, "").trim();
+          // Try to extract JSON object directly
+          try {
+            const jsonMatch = actionsMatch[1].match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[0]);
+              actions = { tasks: parsed.tasks||[], reminders: parsed.reminders||[], notes: parsed.notes||[], goals: parsed.goals||[], decisions: parsed.decisions||[], reply: parsed.reply||replyText };
+              replyText = actions.reply || replyText;
+            }
+          } catch(e2) { /* keep empty actions */ }
         }
       }
+      actions.reply = replyText || rawText;
 
-      // Execute all actions
+      // Execute all actions and track where each task went
       let taskCount = 0, reminderCount = 0, noteCount = 0, goalCount = 0, decisionCount = 0;
+      const taskLocations = [];
 
       (actions.tasks || []).forEach(t => {
-        if (t.title) { addTask({ title: t.title, brand: t.brand || "goldbet", tab: t.tab || "Miscellaneous", priority: t.priority || "medium", due: t.due || "", note: t.note || "", estimatedMins: t.estimatedMins || null }); taskCount++; }
+        if (t.title) {
+          const brand = t.brand || "goldbet";
+          const tab = t.tab || "Miscellaneous";
+          addTask({ title: t.title, brand, tab, priority: t.priority || "medium", due: t.due || "", note: t.note || "", estimatedMins: t.estimatedMins || null });
+          taskCount++;
+          const b = BRANDS.find(x => x.id === brand);
+          taskLocations.push(`${b?.emoji||""}${b?.name||brand} › ${tab}`);
+        }
       });
       (actions.reminders || []).forEach(r => {
         if (r.title && r.date) { addReminder({ title: r.title, date: r.date, time: r.time || "09:00", brand: r.brand || "", note: r.note || "" }); reminderCount++; }
@@ -3307,11 +3348,11 @@ SMART ALLOCATION RULES:
         if (d.title) { addDecision({ title: d.title, context: d.context || "", decision: d.decision || "", reasoning: d.reasoning || "", brand: d.brand || "" }); decisionCount++; }
       });
 
-      // Build action summary
+      // Build action summary with exact locations
       const actionParts = [];
-      if (taskCount) actionParts.push(`✅ ${taskCount} task${taskCount > 1 ? "s" : ""} added`);
+      if (taskCount) actionParts.push(`✅ ${taskCount} task${taskCount > 1 ? "s" : ""} added → ${taskLocations.join(", ")}`);
       if (reminderCount) actionParts.push(`🔔 ${reminderCount} reminder${reminderCount > 1 ? "s" : ""} set`);
-      if (noteCount) actionParts.push(`📌 ${noteCount} note${noteCount > 1 ? "s" : ""} saved`);
+      if (noteCount) actionParts.push(`📌 ${noteCount} note${noteCount > 1 ? "s" : ""} pinned`);
       if (goalCount) actionParts.push(`🎯 ${goalCount} goal${goalCount > 1 ? "s" : ""} created`);
       if (decisionCount) actionParts.push(`⚖ ${decisionCount} decision${decisionCount > 1 ? "s" : ""} logged`);
 
@@ -3794,23 +3835,22 @@ SMART ALLOCATION RULES:
           </div>
         </div>
       )}
-      {/* Floating quick capture */}
-      {view!=="braindump"&&<div style={{position:"fixed",bottom:24,left:220,zIndex:100}}>
+      {/* Floating PA button */}
+      {view!=="pa"&&<div style={{position:"fixed",bottom:24,left:220,zIndex:100}} className="float-capture">
         <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
-          <button onClick={()=>setShowBrainDump(p=>!p)} title="Brain Dump (⚡)" style={{width:46,height:46,borderRadius:99,background:"linear-gradient(135deg,#7C3AED,#4F46E5)",border:"none",color:"#fff",fontSize:20,cursor:"pointer",boxShadow:"0 4px 20px rgba(124,58,237,.5)",transition:"transform .15s",display:"flex",alignItems:"center",justifyContent:"center"}}
-            onMouseEnter={e=>e.currentTarget.style.transform="scale(1.1)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>⚡</button>
+          <button onClick={()=>{setShowBrainDump(p=>!p);}} title="Ask your PA" style={{width:46,height:46,borderRadius:99,background:"linear-gradient(135deg,#4F46E5,#7C3AED)",border:"none",color:"#fff",fontSize:22,cursor:"pointer",boxShadow:"0 4px 20px rgba(79,70,229,.5)",transition:"transform .15s",display:"flex",alignItems:"center",justifyContent:"center"}}
+            onMouseEnter={e=>e.currentTarget.style.transform="scale(1.1)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>🤖</button>
           {showBrainDump&&(
-            <div style={{background:"var(--white)",borderRadius:14,padding:"12px 14px",boxShadow:"var(--s3)",border:"1px solid var(--line)",width:280,marginBottom:0}}>
-              <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--indigo)",letterSpacing:1.5,marginBottom:8,textTransform:"uppercase"}}>⚡ QUICK CAPTURE</div>
-              <textarea className="ta" style={{minHeight:80,fontSize:13,marginBottom:8}}
-                placeholder="Quick task, thought, reminder... just type it all"
-                autoFocus
-                onKeyDown={e=>{if(e.key==="Enter"&&e.ctrlKey){const text=e.target.value.trim();if(text){addTask({title:text,priority:"medium",brand:activeBrand||"goldbet",tab:brandTab});e.target.value="";setShowBrainDump(false);showToast("Added!");}else{setShowBrainDump(false);setView("braindump");}}}}/>
-              <div style={{display:"flex",gap:6}}>
-                <button className="btn btn-primary btn-xs flex1" onClick={()=>{setShowBrainDump(false);setView("braindump");}}>⚡ Full Brain Dump</button>
-                <button className="btn btn-ghost btn-xs" onClick={()=>setShowBrainDump(false)}>✕</button>
+            <div style={{background:"var(--white)",borderRadius:16,padding:"14px 16px",boxShadow:"var(--s3)",border:"1px solid var(--ai-border)",width:320,marginBottom:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                <span style={{fontSize:18}}>🤖</span>
+                <div>
+                  <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"var(--indigo)",letterSpacing:1.5,textTransform:"uppercase",fontWeight:600}}>PA ASSISTANT</div>
+                  <div style={{fontSize:10.5,color:"var(--ink-4)"}}>Tell me what to do</div>
+                </div>
+                <button onClick={()=>setShowBrainDump(false)} style={{marginLeft:"auto",background:"none",border:"none",cursor:"pointer",fontSize:14,color:"var(--ink-4)"}}>✕</button>
               </div>
-              <div style={{fontSize:10,color:"var(--ink-4)",marginTop:6}}>Ctrl+Enter = quick add task</div>
+              <QuickPAInput onSend={(msg)=>{setShowBrainDump(false);setView("pa");setTimeout(()=>sendToPA(msg),100);}} onExpand={()=>{setShowBrainDump(false);setView("pa");}}/>
             </div>
           )}
         </div>
