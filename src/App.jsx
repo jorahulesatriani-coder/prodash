@@ -1,6 +1,30 @@
 // PRODASH v8.1 — build:202603101209
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid, Legend } from "recharts";
+
+// ── Error Boundary — prevents blank page on crash ──
+export class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(e) { return { error: e }; }
+  componentDidCatch(e, info) { console.error("PRODASH Error:", e, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",fontFamily:"monospace",padding:24,background:"#0D0F1A",color:"#E8EAF6"}}>
+          <div style={{fontSize:32,marginBottom:16}}>⚠️</div>
+          <div style={{fontSize:18,fontWeight:700,marginBottom:8,color:"#F87171"}}>PRODASH crashed</div>
+          <div style={{fontSize:12,color:"#9099B8",marginBottom:24,maxWidth:400,textAlign:"center"}}>{this.state.error?.message}</div>
+          <button onClick={()=>{localStorage.clear();window.location.reload();}} style={{padding:"10px 20px",background:"#4F46E5",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontSize:14}}>
+            Clear data &amp; reload
+          </button>
+          <div style={{fontSize:10,color:"#52576E",marginTop:12}}>Or hard refresh: Ctrl+Shift+R</div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 
 // ══════════════════════════════════════════════════════════
 //  CONSTANTS
