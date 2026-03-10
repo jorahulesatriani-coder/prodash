@@ -3241,15 +3241,24 @@ TABS per brand: Reporting, Compliance, Accounting, Miscellaneous
 
 YOUR JOB:
 1. Understand what the user wants — they may tell you tasks, instructions, questions, or anything
-2. Act on it: create tasks, reminders, notes, goals, or decisions
+2. ALWAYS create tasks in the tasks array — NEVER use notes as a substitute for tasks
 3. Always respond conversationally FIRST, then include a JSON actions block
 4. Be their trusted chief of staff — proactive, direct, smart
 
-RESPONSE FORMAT — always end with this exact block (even if empty):
+CRITICAL TASK RULES — READ CAREFULLY:
+- "X done" or "X is done" or "X completed" → CREATE a task with done:true (already completed). NEVER put this in notes.
+- "do X" or "add X" or "need to X" → CREATE a pending task (done:false)
+- "GRV reporting done" → task: title="GRV Reporting", brand=goldbet, tab=Reporting, done=true
+- "payslips done for Goldbet" → task: title="Payslips", brand=goldbet, tab=Accounting, done=true
+- ONLY use notes array for things that are genuinely just notes/memos with no action attached
+- ALWAYS prefer creating tasks over notes
+- If user says something is done → create the task AND set done:true so it shows as completed
+
+RESPONSE FORMAT — always end with this exact block:
 <actions>
 {
   "tasks": [
-    {"title": "task title", "brand": "brandid", "tab": "Reporting|Compliance|Accounting|Miscellaneous", "priority": "urgent|high|medium|low", "due": "YYYY-MM-DD or empty", "note": "optional note", "estimatedMins": 30}
+    {"title": "task title", "brand": "brandid", "tab": "Reporting|Compliance|Accounting|Miscellaneous", "priority": "urgent|high|medium|low", "due": "YYYY-MM-DD or empty", "note": "optional note", "estimatedMins": 30, "done": false}
   ],
   "reminders": [
     {"title": "reminder title", "date": "YYYY-MM-DD", "time": "HH:MM", "brand": "brandid or empty", "note": ""}
@@ -3268,13 +3277,14 @@ RESPONSE FORMAT — always end with this exact block (even if empty):
 </actions>
 
 SMART ALLOCATION RULES:
-- If user mentions "compliance", "licence", "regulatory" → tab: Compliance
-- If user mentions "report", "numbers", "KPIs", "data" → tab: Reporting
-- If user mentions "invoice", "payment", "salary", "accounting" → tab: Accounting
-- If unclear or general → tab: Miscellaneous
-- Match brand by name/context clues. If truly unknown → brand: "goldbet", tab: "Miscellaneous"
-- Always set a sensible priority based on urgency words
-- Always be helpful — if they ask a question, answer it AND create relevant tasks if appropriate`;
+- "GRV", "reporting", "report", "numbers", "KPIs", "data", "MGA", "returns" → tab: Reporting
+- "compliance", "licence", "regulatory", "AML", "KYC", "audit" → tab: Compliance
+- "invoice", "payment", "salary", "payslip", "payroll", "accounting", "P&L" → tab: Accounting
+- If unclear → tab: Miscellaneous
+- Match brand by name: Goldbet=goldbet, Ultrabet=ultrabet, BoostBet=boostbet, AllBets=allbets, BetGold=betgold, TechDev=techdev
+- If brand unknown → brand: "goldbet", tab: "Miscellaneous"
+- Set priority based on urgency words: "urgent/asap/now" → urgent, "important" → high, default → medium
+- ALWAYS be helpful — answer questions AND create tasks`;
 
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -3329,10 +3339,20 @@ SMART ALLOCATION RULES:
         if (t.title) {
           const brand = t.brand || "goldbet";
           const tab = t.tab || "Miscellaneous";
-          addTask({ title: t.title, brand, tab, priority: t.priority || "medium", due: t.due || "", note: t.note || "", estimatedMins: t.estimatedMins || null });
+          const isDone = t.done === true || t.done === "true";
+          // Add task then immediately mark done if needed
+          const taskForm = { title: t.title, brand, tab, priority: t.priority || "medium", due: t.due || "", note: t.note || "", estimatedMins: t.estimatedMins || null };
+          if (isDone) {
+            // Insert directly as done task
+            const key = `${brand}_${tab}`;
+            const task = { id: uid(), title: t.title, priority: t.priority || "medium", due: t.due || "", category: t.tab || "", note: t.note || "", estimatedMins: t.estimatedMins || null, timeSpent: 0, done: true, doneAt: nowISO(), createdAt: nowISO(), recurrence: "", kanbanStatus: "done", attachments: [] };
+            setData(p => ({ ...p, tasks: { ...p.tasks, [key]: [...(p.tasks[key] || []), task] } }));
+          } else {
+            addTask(taskForm);
+          }
           taskCount++;
           const b = BRANDS.find(x => x.id === brand);
-          taskLocations.push(`${b?.emoji||""}${b?.name||brand} › ${tab}`);
+          taskLocations.push(`${b?.emoji||""}${b?.name||brand} › ${tab}${isDone ? " ✓" : ""}`);
         }
       });
       (actions.reminders || []).forEach(r => {
