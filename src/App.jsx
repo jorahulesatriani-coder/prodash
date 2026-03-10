@@ -1487,8 +1487,7 @@ export default function App() {
   // ── Auto scroll chat ──
   useEffect(()=>{chatEndRef.current?.scrollIntoView({behavior:"smooth"});},[chatMsgs]);
 
-  // ── Session log ──
-  useEffect(()=>{addLog("session_start","Session started",null,null,null);},[]);
+  // session log effect — moved below
 
   // ── Brand colour immersion ──
   useEffect(()=>{
@@ -1628,13 +1627,7 @@ export default function App() {
     return()=>clearInterval(focusTimer.current);
   },[focusRunning]);
 
-  // ── Auto AI briefing on load ──
-  useEffect(()=>{
-    const timer=setTimeout(()=>{
-      fetchInsight("briefing","Give me a sharp executive morning briefing. Cover top risks, today's priority, and one strategic insight. Max 3 sentences. Be specific about brands and numbers.");
-    },2000);
-    return()=>clearTimeout(timer);
-  },[]);
+  // briefing effect — moved below
 
   // ── Browser notifications permission ──
   useEffect(()=>{
@@ -2056,6 +2049,11 @@ Return ONLY a valid JSON object (no markdown, no explanation):
     setProfileLoading(false);
   },[getBrandStatsRaw,data,moods,streak,API_KEY]);
 
+  // ── Session log ──
+  useEffect(()=>{addLog("session_start","Session started",null,null,null);},[]);
+
+
+
   // ── Completion sound ──
   const playDone=useCallback(()=>{
     try{
@@ -2265,6 +2263,15 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
     }catch(e){setInsights(p=>({...p,[key]:"Could not load — check connection."}));}
     setInsightLoading(p=>({...p,[key]:false}));
   },[callAI,addLog]);
+
+  // ── Auto AI briefing on load ──
+  useEffect(()=>{
+    const timer=setTimeout(()=>{
+      fetchInsight("briefing","Give me a sharp executive morning briefing. Cover top risks, today's priority, and one strategic insight. Max 3 sentences. Be specific about brands and numbers.");
+    },2000);
+    return()=>clearTimeout(timer);
+  },[]);
+
 
   const sendMessage=async()=>{
     if(!chatInput.trim()||aiLoading) return;
