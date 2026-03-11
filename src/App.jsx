@@ -30,12 +30,13 @@ export class ErrorBoundary extends React.Component {
 //  CONSTANTS
 // ══════════════════════════════════════════════════════════
 const BRANDS = [
-  {id:"goldbet", name:"Goldbet", color:"#B45309",bg:"#FFFBEB",emoji:"🥇"},
-  {id:"ultrabet",name:"Ultrabet",color:"#6D28D9",bg:"#F5F3FF",emoji:"⚡"},
-  {id:"boostbet",name:"BoostBet",color:"#B91C1C",bg:"#FEF2F2",emoji:"🚀"},
-  {id:"allbets", name:"AllBets", color:"#065F46",bg:"#ECFDF5",emoji:"🎯"},
-  {id:"betgold", name:"BetGold", color:"#C2410C",bg:"#FFF7ED",emoji:"💰"},
-  {id:"techdev", name:"TechDev", color:"#1E40AF",bg:"#EFF6FF",emoji:"💻"},
+  {id:"goldbet", name:"Goldbet",       color:"#B45309",bg:"#FFFBEB",emoji:"🥇"},
+  {id:"ultrabet",name:"Ultrabet",      color:"#6D28D9",bg:"#F5F3FF",emoji:"⚡"},
+  {id:"boostbet",name:"BoostBet",      color:"#B91C1C",bg:"#FEF2F2",emoji:"🚀"},
+  {id:"allbets", name:"AllBets",       color:"#065F46",bg:"#ECFDF5",emoji:"🎯"},
+  {id:"betgold", name:"BetGold",       color:"#C2410C",bg:"#FFF7ED",emoji:"💰"},
+  {id:"techdev", name:"TechDev",       color:"#1E40AF",bg:"#EFF6FF",emoji:"💻"},
+  {id:"misc",    name:"Miscellaneous", color:"#6B7280",bg:"#F9FAFB",emoji:"📋"},
 ];
 const BRAND_TABS  = ["Reporting","Compliance","Accounting","Miscellaneous"];
 const PRIORITIES  = [{key:"low",label:"Low"},{key:"medium",label:"Medium"},{key:"high",label:"High"},{key:"urgent",label:"Urgent"}];
@@ -1741,11 +1742,52 @@ export default function App() {
     return()=>window.removeEventListener("keydown",handler);
   },[]);
 
+  // ── Service Worker Registration ──
+  const swRef = useRef(null);
+  useEffect(()=>{
+    if("serviceWorker" in navigator){
+      navigator.serviceWorker.register("/prodash/sw.js",{scope:"/prodash/"})
+        .then(reg=>{
+          swRef.current=reg;
+          // Tell SW to check for overdue notifications on load
+          if(reg.active) reg.active.postMessage({type:"CHECK_NOW"});
+          // Register periodic sync if supported (Chrome Android)
+          if("periodicSync" in reg){
+            reg.periodicSync.register("prodash-notif-check",{minInterval:60*60*1000}).catch(()=>{});
+          }
+        })
+        .catch(e=>console.warn("SW registration failed:",e));
+    }
+  },[]);
+
+  // ── Schedule a notification via service worker ──
+  const scheduleNotification = useCallback((id, title, body, scheduledTime)=>{
+    if(!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.ready.then(reg=>{
+      reg.active?.postMessage({type:"SCHEDULE_NOTIFICATION",id,title,body,scheduledTime});
+    }).catch(()=>{});
+  },[]);
+
+  const cancelNotification = useCallback((id)=>{
+    if(!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.ready.then(reg=>{
+      reg.active?.postMessage({type:"CANCEL_NOTIFICATION",id});
+    }).catch(()=>{});
+  },[]);
+
   const requestNotifPermission=async()=>{
     if("Notification" in window){
       const p=await Notification.requestPermission();
       setNotifPerm(p);
-      if(p==="granted") showToast("Notifications enabled! You'll be alerted for reminders.");
+      if(p==="granted"){
+        showToast("Notifications enabled! You'll be notified for all tasks and reminders.");
+        // Re-register SW after permission granted
+        if("serviceWorker" in navigator){
+          navigator.serviceWorker.ready.then(reg=>{
+            reg.active?.postMessage({type:"CHECK_NOW"});
+          });
+        }
+      }
     }
   };
 
@@ -1889,14 +1931,40 @@ Return ONLY a valid JSON object (no markdown, no explanation):
 
   // ── CRUD ──
   const addTask=useCallback((form)=>{
-    const brand=form.brand||activeBrand||"goldbet";
+    const brand=form.brand||activeBrand||"misc";
     const tab=form.tab||brandTab;
     const key=`${brand}_${tab}`;
     const task={id:uid(),title:form.title,priority:form.priority||"medium",due:form.due||"",category:form.category||"",note:form.note||"",estimatedMins:form.estimatedMins||null,timeSpent:0,done:false,createdAt:nowISO(),recurrence:form.recurrence||"",kanbanStatus:form.kanbanStatus||"todo",attachments:form.attachments||[]};
     setData(p=>({...p,tasks:{...p.tasks,[key]:[...(p.tasks[key]||[]),task]}}));
     addLog("task_added",`Task: "${task.title}"`,brand,tab,task.category?`Category: ${task.category}`:"");
     showToast(`Task added to ${BRANDS.find(b=>b.id===brand)?.name||brand} · ${tab}`);
-  },[activeBrand,brandTab,addLog,showToast]);
+    // Schedule notification if task has a due date and is not already done
+    if(task.due && !task.done && Notification.permission==="granted"){
+      // Notify at 9am on due date
+      const dueDate = new Date(task.due + "T09:00:00");
+      const now = new Date();
+      if(dueDate > now){
+        scheduleNotification(
+          `task_${task.id}`,
+          `${task.priority==="urgent"?"🚨":"📌"} ${task.title}`,
+          `Due today · ${BRANDS.find(b=>b.id===brand)?.name||brand} › ${tab}${task.priority==="urgent"?" · URGENT":""}`,
+          dueDate.getTime()
+        );
+      }
+      // Also notify 1 day before if urgent or high
+      if((task.priority==="urgent"||task.priority==="high") && dueDate > now){
+        const dayBefore = new Date(dueDate.getTime() - 24*60*60*1000);
+        if(dayBefore > now){
+          scheduleNotification(
+            `task_${task.id}_early`,
+            `⏰ Tomorrow: ${task.title}`,
+            `Due tomorrow · ${task.priority} priority · ${BRANDS.find(b=>b.id===brand)?.name||brand}`,
+            dayBefore.getTime()
+          );
+        }
+      }
+    }
+  },[activeBrand,brandTab,addLog,showToast,scheduleNotification]);
 
   const toggleTask=useCallback((key,id)=>{
     setData(p=>{
@@ -1934,6 +2002,9 @@ Return ONLY a valid JSON object (no markdown, no explanation):
       if(task) addLog("task_deleted",`Deleted: "${task.title}"`,key.split("_")[0],key.split("_").slice(1).join("_"),"");
       return {...p,tasks:{...p.tasks,[key]:(p.tasks[key]||[]).filter(t=>t.id!==id)}};
     });
+    // Cancel any scheduled notifications for this task
+    cancelNotification(`task_${id}`);
+    cancelNotification(`task_${id}_early`);
     showToast("Task deleted","warning");
   },[addLog,showToast]);
 
@@ -1960,11 +2031,36 @@ Return ONLY a valid JSON object (no markdown, no explanation):
   },[addLog,showToast]);
 
   const addReminder=useCallback((form)=>{
-    const rem={id:uid(),title:form.title,date:form.date,time:form.time,brand:form.brand,note:form.note,createdAt:nowISO(),notified:false};
+    const rem={id:uid(),title:form.title,date:form.date,time:form.time,brand:form.brand||"misc",note:form.note,createdAt:nowISO(),notified:false};
     setData(p=>({...p,reminders:[...p.reminders,rem].sort((a,b)=>a.date.localeCompare(b.date))}));
     addLog("reminder_set",`Reminder: "${form.title}" on ${fmtDate(form.date)}`,form.brand||null,null,"");
-    showToast("Reminder set");
-  },[addLog,showToast]);
+    showToast("Reminder set + task created 📋");
+    // Auto-create a task from this reminder
+    const brand = form.brand||"misc";
+    const tab = form.tab||"Miscellaneous";
+    const taskKey = `${brand}_${tab}`;
+    const autoTask = {
+      id:uid(), title:form.title, priority:form.priority||"medium",
+      due:form.date||"", category:"", note:form.note||"",
+      estimatedMins:null, timeSpent:0, done:false,
+      createdAt:nowISO(), recurrence:"", kanbanStatus:"todo",
+      attachments:[], reminderId:rem.id
+    };
+    setData(p=>({...p,tasks:{...p.tasks,[taskKey]:[...(p.tasks[taskKey]||[]),autoTask]}}));
+    // Schedule push notification for the reminder time
+    if(form.date && Notification.permission==="granted"){
+      const timeStr = form.time||"09:00";
+      const scheduledTime = new Date(`${form.date}T${timeStr}:00`).getTime();
+      if(scheduledTime > Date.now()){
+        scheduleNotification(
+          `rem_${rem.id}`,
+          `🔔 Reminder: ${form.title}`,
+          `${form.date} at ${timeStr}${form.brand?" · "+BRANDS.find(b=>b.id===form.brand)?.name:""}`,
+          scheduledTime
+        );
+      }
+    }
+  },[addLog,showToast,scheduleNotification]);
 
   const deleteReminder=useCallback((id)=>{
     setData(p=>({...p,reminders:p.reminders.filter(r=>r.id!==id)}));
@@ -3320,6 +3416,7 @@ BRANDS (for allocation):
 - allbets = AllBets 🎯 (green)
 - betgold = BetGold 💰 (orange)
 - techdev = TechDev 💻 (blue)
+- misc = Miscellaneous 📋 (grey) ← DEFAULT when no brand mentioned
 
 TABS per brand: Reporting, Compliance, Accounting, Miscellaneous
 
@@ -3365,8 +3462,8 @@ SMART ALLOCATION RULES:
 - "compliance", "licence", "regulatory", "AML", "KYC", "audit" → tab: Compliance
 - "invoice", "payment", "salary", "payslip", "payroll", "accounting", "P&L" → tab: Accounting
 - If unclear → tab: Miscellaneous
-- Match brand by name: Goldbet=goldbet, Ultrabet=ultrabet, BoostBet=boostbet, AllBets=allbets, BetGold=betgold, TechDev=techdev
-- If brand unknown → brand: "goldbet", tab: "Miscellaneous"
+- Match brand by name: Goldbet=goldbet, Ultrabet=ultrabet, BoostBet=boostbet, AllBets=allbets, BetGold=betgold, TechDev=techdev, Misc/Personal/Other=misc
+- If brand unknown → brand: "misc", tab: "Miscellaneous"
 - Set priority based on urgency words: "urgent/asap/now" → urgent, "important" → high, default → medium
 - ALWAYS be helpful — answer questions AND create tasks`;
 
@@ -3577,7 +3674,7 @@ SMART ALLOCATION RULES:
             <div className="card" style={{background:"var(--amber-lt)",borderColor:"rgba(217,119,6,.3)"}}>
               <div style={{fontWeight:600,fontSize:13,marginBottom:5,color:"#92400E"}}>🔔 Enable Notifications</div>
               <div style={{fontSize:12,color:"#B45309",marginBottom:10}}>Get browser alerts when reminders are due — even when another tab is open.</div>
-              <button className="btn btn-amber btn-sm" onClick={requestNotifPermission}>Enable Browser Notifications</button>
+              <button className="btn btn-amber btn-sm" onClick={requestNotifPermission}>🔔 Enable Notifications (get alerts when site is closed)</button>
             </div>
           )}
         </div>
