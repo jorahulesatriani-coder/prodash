@@ -1,53 +1,66 @@
-// PRODASH Service Worker — Background Notifications v2.0
+// PRODASH Service Worker v3.0 — Proactive Assistant
 
-// ── IndexedDB helpers ──
+// ── IndexedDB ──
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('prodash_sw_db', 1);
+    const req = indexedDB.open('prodash_sw_db', 2);
     req.onupgradeneeded = e => {
-      e.target.result.createObjectStore('notifications', { keyPath: 'id' });
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('notifications'))
+        db.createObjectStore('notifications', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('briefing'))
+        db.createObjectStore('briefing', { keyPath: 'id' });
     };
     req.onsuccess = e => resolve(e.target.result);
     req.onerror = () => reject(req.error);
   });
 }
 
-async function saveNotif(n) {
+async function dbPut(store, obj) {
   const db = await openDB();
   return new Promise((res, rej) => {
-    const tx = db.transaction('notifications', 'readwrite');
-    tx.objectStore('notifications').put(n);
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).put(obj);
     tx.oncomplete = res; tx.onerror = () => rej(tx.error);
   });
 }
 
-async function getAllNotifs() {
+async function dbGet(store, id) {
   const db = await openDB();
   return new Promise((res, rej) => {
-    const tx = db.transaction('notifications', 'readonly');
-    const req = tx.objectStore('notifications').getAll();
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).get(id);
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+
+async function dbGetAll(store) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).getAll();
     req.onsuccess = () => res(req.result || []);
     req.onerror = () => rej(req.error);
   });
 }
 
-async function removeNotif(id) {
+async function dbDelete(store, id) {
   const db = await openDB();
   return new Promise((res, rej) => {
-    const tx = db.transaction('notifications', 'readwrite');
-    tx.objectStore('notifications').delete(id);
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).delete(id);
     tx.oncomplete = res; tx.onerror = () => rej(tx.error);
   });
 }
 
-// ── In-memory timers ──
+// ── Timer registry ──
 const timers = new Map();
 
-async function scheduleTimer(n) {
-  if (timers.has(n.id)) { clearTimeout(timers.get(n.id)); }
+function scheduleTimer(n) {
+  if (timers.has(n.id)) clearTimeout(timers.get(n.id));
   const delay = Math.max(0, n.scheduledTime - Date.now());
-  // Only set timer if within 24 hours (browsers kill SW otherwise)
-  if (delay > 24 * 60 * 60 * 1000) return;
+  if (delay > 25 * 60 * 60 * 1000) return; // >25h, skip (re-scheduled on next SW wake)
   const t = setTimeout(async () => {
     timers.delete(n.id);
     try {
@@ -56,21 +69,56 @@ async function scheduleTimer(n) {
         icon: '/prodash/icon.svg',
         badge: '/prodash/icon.svg',
         tag: n.id,
-        requireInteraction: true,
+        requireInteraction: n.requireInteraction || false,
         vibrate: [200, 100, 200],
-        data: { url: '/prodash/' }
+        data: { url: '/prodash/', view: n.view || '' }
       });
-      await removeNotif(n.id);
+      await dbDelete('notifications', n.id);
     } catch(e) { console.error('SW notif error:', e); }
   }, delay);
   timers.set(n.id, t);
 }
 
-// Check for any overdue notifications and fire them immediately
-async function checkOverdue() {
+// Schedule next 8:30am daily briefing
+async function scheduleDailyBriefing() {
+  const now = new Date();
+  const next = new Date();
+  next.setHours(8, 30, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1); // push to tomorrow if 8:30 already passed
+
+  // Get latest briefing data
+  const briefingData = await dbGet('briefing', 'latest');
+  if (!briefingData) return;
+
+  const { overdue, pending, score, brandAlerts, todayDue } = briefingData;
+
+  // Build a useful message
+  let body = '';
+  if (overdue > 0) body += `🔥 ${overdue} overdue · `;
+  if (todayDue > 0) body += `⏰ ${todayDue} due today · `;
+  body += `${pending} pending · Score ${score}/100`;
+  if (brandAlerts && brandAlerts.length > 0) body += `\n⚠️ ${brandAlerts[0]}`;
+
+  const title = overdue > 0
+    ? `🚨 PRODASH — ${overdue} overdue task${overdue > 1 ? 's' : ''}`
+    : `☀️ PRODASH Morning Briefing`;
+
+  await dbPut('notifications', {
+    id: 'daily_briefing',
+    title,
+    body: body.replace(/ · $/, ''),
+    scheduledTime: next.getTime(),
+    requireInteraction: overdue > 0,
+    view: 'dashboard'
+  });
+
+  scheduleTimer({ id: 'daily_briefing', title, body: body.replace(/ · $/, ''), scheduledTime: next.getTime(), requireInteraction: overdue > 0 });
+}
+
+async function checkAndFireOverdue() {
+  const all = await dbGetAll('notifications');
   const now = Date.now();
-  const notifs = await getAllNotifs();
-  for (const n of notifs) {
+  for (const n of all) {
     if (n.scheduledTime <= now) {
       try {
         await self.registration.showNotification(n.title, {
@@ -78,66 +126,76 @@ async function checkOverdue() {
           icon: '/prodash/icon.svg',
           badge: '/prodash/icon.svg',
           tag: n.id,
-          requireInteraction: true,
+          requireInteraction: n.requireInteraction || false,
           vibrate: [200, 100, 200],
-          data: { url: '/prodash/' }
+          data: { url: '/prodash/', view: n.view || '' }
         });
-        await removeNotif(n.id);
+        await dbDelete('notifications', n.id);
       } catch(e) {}
     } else {
-      await scheduleTimer(n);
+      scheduleTimer(n);
     }
   }
 }
 
-// ── Event Listeners ──
-self.addEventListener('install', event => {
-  self.skipWaiting();
-});
-
+// ── Lifecycle ──
+self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', event => {
   event.waitUntil(
-    self.clients.claim().then(() => checkOverdue())
+    self.clients.claim().then(() => checkAndFireOverdue())
   );
 });
 
+// ── Messages from App ──
 self.addEventListener('message', async event => {
   const { type, ...data } = event.data || {};
 
   if (type === 'SCHEDULE_NOTIFICATION') {
-    await saveNotif(data);
-    await scheduleTimer(data);
-    event.ports?.[0]?.postMessage({ ok: true });
+    await dbPut('notifications', data);
+    scheduleTimer(data);
   }
 
   if (type === 'CANCEL_NOTIFICATION') {
-    if (timers.has(data.id)) {
-      clearTimeout(timers.get(data.id));
-      timers.delete(data.id);
-    }
-    await removeNotif(data.id);
+    if (timers.has(data.id)) { clearTimeout(timers.get(data.id)); timers.delete(data.id); }
+    await dbDelete('notifications', data.id);
+  }
+
+  if (type === 'UPDATE_BRIEFING') {
+    // App sends latest data snapshot; we store it and reschedule tomorrow's briefing
+    await dbPut('briefing', { id: 'latest', ...data, updatedAt: Date.now() });
+    await scheduleDailyBriefing();
   }
 
   if (type === 'CHECK_NOW') {
-    await checkOverdue();
+    await checkAndFireOverdue();
+  }
+
+  if (type === 'PING') {
+    // Keep SW alive during active session, re-check timers
+    await checkAndFireOverdue();
   }
 });
 
+// ── Notification click ──
 self.addEventListener('notificationclick', event => {
   event.notification.close();
+  const targetView = event.notification.data?.view || '';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
       for (const c of list) {
-        if (c.url.includes('/prodash') && 'focus' in c) return c.focus();
+        if (c.url.includes('/prodash')) {
+          c.focus();
+          if (targetView) c.postMessage({ type: 'NAVIGATE', view: targetView });
+          return;
+        }
       }
       return clients.openWindow('/prodash/');
     })
   );
 });
 
-// Periodic background sync (Chrome Android supports this)
 self.addEventListener('periodicsync', event => {
-  if (event.tag === 'prodash-notif-check') {
-    event.waitUntil(checkOverdue());
+  if (event.tag === 'prodash-check') {
+    event.waitUntil(checkAndFireOverdue());
   }
 });
