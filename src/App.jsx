@@ -1429,7 +1429,7 @@ export default function App() {
   const [activeTimers,setActiveTimers] = useState({});
   const [logFilter,setLogFilter]  = useState("all");
   const [dbStatus,setDbStatus]    = useState("loading");
-  const [darkMode,setDarkMode]    = useState(()=>localStorage.getItem("prodash_dark")==="1");
+  const [darkMode,setDarkMode]    = useState(false);
   const [notifPerm,setNotifPerm]  = useState("default");
   const [activeAlerts,setActiveAlerts] = useState([]);
   const [selectedTasks,setSelectedTasks] = useState(new Set());
@@ -1800,7 +1800,7 @@ export default function App() {
         todayDone, todayTotal
       });
     }).catch(()=>{});
-  },[data, getScore]);
+  },[data]);
 
   // Send briefing update whenever data changes
   useEffect(()=>{ sendBriefingToSW(); },[data]);
@@ -2557,425 +2557,247 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
 
   const renderDashboard=()=>{
     const today=todayStr();
-    const allTasksRaw=Object.values(data.tasks).flat();
-    // Filter by selected brand if not "all"
-    const allTasks = dashBrandFilter==="all"
-      ? allTasksRaw
-      : Object.entries(data.tasks).filter(([k])=>k.startsWith(dashBrandFilter+"_")).flatMap(([,v])=>v);
-    const overdueTasks=allTasks.filter(t=>!t.done&&t.due&&t.due<today);
-    const dueTodayTasks=allTasks.filter(t=>!t.done&&t.due===today);
-    const urgentTasks=allTasks.filter(t=>!t.done&&t.priority==="urgent");
-    const pendingTasks=allTasks.filter(t=>!t.done);
-    const hour=new Date().getHours();
-    const greeting=hour<5?"Good night":hour<12?"Good morning":hour<18?"Good afternoon":hour<22?"Good evening":"Good night";
-    const chartData=Array.from({length:7},(_,i)=>{
-      const d=new Date(); d.setDate(d.getDate()-(6-i));
-      const ds=d.toISOString().split("T")[0];
-      const dayTasks=allTasks.filter(t=>t.createdAt?.startsWith(ds));
-      return {day:["S","M","T","W","T","F","S"][d.getDay()],added:dayTasks.length,done:dayTasks.filter(t=>t.done).length};
+    const tomorrow=new Date(Date.now()+86400000).toISOString().split("T")[0];
+
+    // Flatten all tasks across brands with their key info
+    const allTasksFlat=Object.entries(data.tasks).flatMap(([key,tasks])=>
+      tasks.map(t=>{
+        const [brand,...rest]=key.split("_");
+        return {...t,key,brand,tab:rest.join("_")};
+      })
+    );
+
+    // Filter by brand if selected
+    const filteredByBrand = dashBrandFilter==="all"
+      ? allTasksFlat
+      : allTasksFlat.filter(t=>t.brand===dashBrandFilter);
+
+    // Only pending tasks for the list
+    const pending = filteredByBrand.filter(t=>!t.done);
+
+    // Sort: overdue first, then by priority, then by due date
+    const pOrder={urgent:0,high:1,medium:2,low:3};
+    const sorted = [...pending].sort((a,b)=>{
+      const aOver = a.due && a.due<today;
+      const bOver = b.due && b.due<today;
+      if(aOver && !bOver) return -1;
+      if(!aOver && bOver) return 1;
+      const ap = pOrder[a.priority]??2;
+      const bp = pOrder[b.priority]??2;
+      if(ap!==bp) return ap-bp;
+      if(a.due && b.due) return a.due.localeCompare(b.due);
+      if(a.due) return -1;
+      if(b.due) return 1;
+      return (b.createdAt||"").localeCompare(a.createdAt||"");
     });
-    const topMission=missionDone?null:(missionTask||urgentTasks[0]||dueTodayTasks[0]||pendingTasks.sort((a,b)=>({urgent:0,high:1,medium:2,low:3}[a.priority]||2)-({urgent:0,high:1,medium:2,low:3}[b.priority]||2))[0]);
-    const moodToday=moods.find(m=>m.date===today);
-    const weekAgo=new Date(Date.now()-7*86400000).toISOString().split("T")[0];
-    const weekMoods=moods.filter(m=>m.date>=weekAgo);
-    const avgMood=weekMoods.length?Math.round(weekMoods.reduce((s,m)=>s+m.score,0)/weekMoods.length*10)/10:null;
+
+    const overdueCount = pending.filter(t=>t.due&&t.due<today).length;
+    const dueTodayCount = pending.filter(t=>t.due===today).length;
+
+    const relDate = (due) => {
+      if(!due) return null;
+      if(due<today){
+        const d=Math.ceil((new Date(today)-new Date(due))/86400000);
+        return {text:`${d}d overdue`, cls:"task-due-overdue"};
+      }
+      if(due===today) return {text:"Today", cls:"task-due-today"};
+      if(due===tomorrow) return {text:"Tomorrow", cls:"task-due-soon"};
+      const d=Math.ceil((new Date(due)-new Date(today))/86400000);
+      if(d<=7) return {text:`${d}d`, cls:"task-due-soon"};
+      const dt=new Date(due);
+      return {text:dt.toLocaleDateString("en-AU",{day:"numeric",month:"short"}), cls:"task-due-later"};
+    };
 
     return (
-      <div className="anim-up">
+      <div className="anim-up dash-calm">
 
-        {/* ── COMMAND HEADER ── */}
-        <div style={{marginBottom:20,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16}}>
-          <div>
-            <div style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:"var(--ink-4)",letterSpacing:2,textTransform:"uppercase",marginBottom:4}}>
-              <LiveDateLine/>
-            </div>
-            <div style={{fontSize:26,fontWeight:700,color:"var(--ink)",lineHeight:1.1,letterSpacing:-0.5}}>
-              {greeting} {hour<5?"🌙":hour<12?"☀️":hour<18?"⛅":hour<22?"🌆":"🌙"}
-            </div>
-            <div style={{fontSize:13.5,color:"var(--ink-3)",marginTop:4}}>
-              {pendingTasks.length} tasks pending · {overdueTasks.length>0?<span style={{color:"#DC2626",fontWeight:600}}>{overdueTasks.length} overdue</span>:"all on track"} · Score <strong>{score}</strong>
-            </div>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,cursor:"pointer",position:"relative"}}
-            onClick={()=>setShowScoreBreakdown(p=>!p)}>
-            <ScoreRing score={score}/>
-            <div style={{fontFamily:"Martian Mono,monospace",fontSize:7,color:"var(--ink-4)",letterSpacing:1.5,textTransform:"uppercase"}}>TAP FOR BREAKDOWN</div>
-            {showScoreBreakdown&&(()=>{
-              const s=getStats();
-              const bs2=getBrandStats();
-              const completionPts = Math.round(s.rate*0.4);
-              const todayPts = s.todayTotal>0?Math.round((s.todayDone/s.todayTotal)*25):10;
-              const overduePts = Math.max(0,20-(s.overdue*5));
-              const brandPts = Math.round((bs2.filter(b=>b.tasks>0).length/BRANDS.length)*15);
-              return(
-              <div style={{position:"absolute",top:"100%",right:0,marginTop:8,width:220,background:"var(--white)",border:"1px solid var(--line)",borderRadius:12,padding:"14px 16px",boxShadow:"var(--s3)",zIndex:100,cursor:"default"}}
-                onClick={e=>e.stopPropagation()}>
-                <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,fontWeight:600,letterSpacing:1.5,textTransform:"uppercase",marginBottom:10,color:"var(--ink)"}}>SCORE BREAKDOWN</div>
-                {[
-                  {label:"Task completion rate",pts:completionPts,max:40,tip:`${s.rate}% done → ${completionPts}/40`},
-                  {label:"Tasks done today",pts:todayPts,max:25,tip:`${s.todayDone}/${s.todayTotal} today → ${todayPts}/25`},
-                  {label:"Overdue penalty",pts:overduePts,max:20,tip:`${s.overdue} overdue (−5 each) → ${overduePts}/20`},
-                  {label:"Active brands",pts:brandPts,max:15,tip:`${bs2.filter(b=>b.tasks>0).length}/${BRANDS.length} brands active → ${brandPts}/15`},
-                ].map(item=>(
-                  <div key={item.label} style={{marginBottom:8}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                      <span style={{fontSize:11,color:"var(--ink-3)"}}>{item.label}</span>
-                      <span style={{fontFamily:"Martian Mono,monospace",fontSize:10,fontWeight:600,color:item.pts===item.max?"#059669":item.pts>item.max*0.5?"var(--ink)":"#DC2626"}}>{item.pts}/{item.max}</span>
-                    </div>
-                    <div style={{height:3,background:"var(--line)",borderRadius:99}}>
-                      <div style={{height:"100%",width:`${(item.pts/item.max)*100}%`,background:item.pts===item.max?"#059669":item.pts>item.max*0.5?"#2563EB":"#DC2626",borderRadius:99,transition:"width .4s"}}/>
-                    </div>
-                    <div style={{fontSize:9.5,color:"var(--ink-4)",marginTop:2}}>{item.tip}</div>
-                  </div>
-                ))}
-                <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid var(--line)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span style={{fontSize:11,color:"var(--ink-3)"}}>TOTAL</span>
-                  <span style={{fontFamily:"Martian Mono,monospace",fontSize:16,fontWeight:700,color:score>=70?"#059669":score>=50?"#D97706":"#DC2626"}}>{score}/100</span>
-                </div>
-                {s.overdue>0&&<div style={{marginTop:8,padding:"6px 10px",background:"#FEF2F2",borderRadius:7,fontSize:11,color:"#DC2626"}}>Fix {s.overdue} overdue task{s.overdue>1?"s":""} to gain {Math.min(s.overdue*5,20)} points</div>}
-              </div>
-              );
-            })()}
-          </div>
+        {/* DATE LINE */}
+        <div className="dash-date">
+          {new Date().toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long"})}
         </div>
 
-        {/* ── QUICK ADD ── */}
-        {(()=>{
-          const [qTitle,setQTitle] = [quickAddTitle, setQuickAddTitle];
-          const [qDue,setQDue] = [quickAddDue, setQuickAddDue];
-          return(
-          <div style={{marginBottom:14,display:"flex",gap:8,alignItems:"center"}}>
-            <input
-              className="inp" placeholder="Add a task... (press Enter)"
-              value={qTitle} onChange={e=>setQuickAddTitle(e.target.value)}
-              style={{flex:1,fontSize:13}}
-              onKeyDown={e=>{
-                if(e.key==="Enter"&&qTitle.trim()){
-                  addTask({title:qTitle.trim(),due:qDue,priority:"medium",brand:"misc",tab:"Miscellaneous"});
-                  setQuickAddTitle(""); setQuickAddDue("");
-                }
-              }}
-            />
-            <input type="date" className="inp" value={qDue} onChange={e=>setQuickAddDue(e.target.value)}
-              style={{width:130,fontSize:12,flexShrink:0}}/>
-            <button className="btn btn-primary btn-sm" style={{flexShrink:0,whiteSpace:"nowrap"}}
-              disabled={!qTitle.trim()}
-              onClick={()=>{
-                if(qTitle.trim()){
-                  addTask({title:qTitle.trim(),due:qDue,priority:"medium",brand:"misc",tab:"Miscellaneous"});
-                  setQuickAddTitle(""); setQuickAddDue("");
-                }
-              }}>
-              + Add
-            </button>
-          </div>
-          );
-        })()}
+        {/* HEADLINE */}
+        <div className="dash-headline">
+          {pending.length===0 ? (
+            <span className="dash-headline-zero">All clear. Nothing pending.</span>
+          ) : (
+            <>
+              <span className="dash-num">{pending.length}</span>
+              <span className="dash-label">
+                {pending.length===1?"task":"tasks"} pending
+                {overdueCount>0 && <span className="dash-pill dash-pill-red">{overdueCount} overdue</span>}
+                {dueTodayCount>0 && overdueCount===0 && <span className="dash-pill dash-pill-amber">{dueTodayCount} today</span>}
+              </span>
+            </>
+          )}
+        </div>
 
-        {/* ── BRAND FILTER ── */}
-        <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-          <button onClick={()=>setDashBrandFilter("all")}
-            style={{padding:"5px 11px",borderRadius:99,border:dashBrandFilter==="all"?"1px solid var(--ink)":"1px solid var(--line)",background:dashBrandFilter==="all"?"var(--ink)":"transparent",color:dashBrandFilter==="all"?"var(--white)":"var(--ink-3)",fontSize:11,fontWeight:500,cursor:"pointer"}}>
-            All brands
+        {/* QUICK ADD */}
+        <div className="dash-quickadd">
+          <input
+            className="dash-quickadd-input"
+            placeholder="Add a task..."
+            value={quickAddTitle}
+            onChange={e=>setQuickAddTitle(e.target.value)}
+            onKeyDown={e=>{
+              if(e.key==="Enter"&&quickAddTitle.trim()){
+                addTask({title:quickAddTitle.trim(),due:quickAddDue,priority:"medium",brand:dashBrandFilter==="all"?"misc":dashBrandFilter,tab:"Miscellaneous"});
+                setQuickAddTitle(""); setQuickAddDue("");
+              }
+            }}
+          />
+          <input
+            type="date"
+            className="dash-quickadd-date"
+            value={quickAddDue}
+            onChange={e=>setQuickAddDue(e.target.value)}
+          />
+        </div>
+
+        {/* BRAND FILTER */}
+        <div className="dash-filter">
+          <button onClick={()=>setDashBrandFilter("all")} className={`dash-filter-pill${dashBrandFilter==="all"?" active":""}`}>
+            All
           </button>
           {BRANDS.map(b=>(
             <button key={b.id} onClick={()=>setDashBrandFilter(b.id)}
-              style={{padding:"5px 11px",borderRadius:99,border:`1px solid ${dashBrandFilter===b.id?b.color:"var(--line)"}`,background:dashBrandFilter===b.id?b.color:"transparent",color:dashBrandFilter===b.id?"#fff":b.color,fontSize:11,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
-              <span style={{width:7,height:7,borderRadius:99,background:dashBrandFilter===b.id?"#fff":b.color,display:"inline-block"}}/>
+              className={`dash-filter-pill${dashBrandFilter===b.id?" active":""}`}
+              style={dashBrandFilter===b.id?{background:b.color,borderColor:b.color,color:"#fff"}:{color:b.color,borderColor:b.color+"40"}}>
+              <span className="dash-filter-dot" style={{background:dashBrandFilter===b.id?"#fff":b.color}}/>
               {b.name}
             </button>
           ))}
         </div>
 
-        {/* ── MISSION OF THE DAY ── */}
-        {topMission&&(
-          <div style={{marginBottom:16,padding:"16px 20px",background:"linear-gradient(135deg,#4F46E518,#7C3AED10)",border:"1px solid #4F46E530",borderRadius:14,display:"flex",alignItems:"center",gap:16}}>
-            <div style={{fontSize:28}}>🎯</div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"#4F46E5",letterSpacing:2,textTransform:"uppercase",marginBottom:4}}>TODAY'S MISSION</div>
-              <div style={{fontSize:14.5,fontWeight:600,color:"var(--ink)",lineHeight:1.3,marginBottom:4}}>{topMission.title}</div>
-              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-                {BRANDS.find(b=>b.id===topMission.brand?.split("_")[0])&&(
-                  <span style={{fontSize:11,color:"var(--ink-3)"}}>{BRANDS.find(b=>b.id===topMission.brand?.split("_")[0])?.emoji} {BRANDS.find(b=>b.id===topMission.brand?.split("_")[0])?.name}</span>
-                )}
-                {topMission.due&&(()=>{const db=dueBadge(topMission.due);return db?<span style={{fontFamily:"Martian Mono,monospace",fontSize:9,fontWeight:600,color:db.color,background:db.bg,padding:"2px 8px",borderRadius:99}}>{db.label}</span>:null;})()}
-                <span style={{fontFamily:"Martian Mono,monospace",fontSize:9,padding:"2px 8px",background:"var(--surface)",borderRadius:99,color:"var(--ink-4)",textTransform:"uppercase"}}>{topMission.priority}</span>
-              </div>
+        {/* TASK LIST — the heart of the dashboard */}
+        <div className="dash-list">
+          {sorted.length===0 ? (
+            <div className="dash-empty">
+              {dashBrandFilter==="all" ? "No pending tasks. Type one above to begin." : `Nothing pending for ${BRANDS.find(b=>b.id===dashBrandFilter)?.name||"this brand"}.`}
             </div>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              <button className="btn btn-primary" style={{fontSize:12,padding:"8px 18px",borderRadius:10}}
-                onClick={()=>{const id=topMission.id;Object.entries(data.tasks).forEach(([k,arr])=>{const idx=arr.findIndex(t=>t.id===id);if(idx>=0){const upd={...data.tasks};upd[k]=[...arr];upd[k][idx]={...upd[k][idx],done:true,doneAt:nowISO()};setData(d=>({...d,tasks:upd}));playDone();}});setMissionDone(true);showToast("🎯 Mission complete!");}}>
-                ✓ Done
-              </button>
-              <button className="btn btn-ghost" style={{fontSize:11,padding:"5px 10px"}}
-                onClick={()=>{setActiveBrand(topMission.brand?.split("_")[0]||null);setView(topMission.brand?"brand":"warroom");}}>
-                View →
-              </button>
-            </div>
-          </div>
-        )}
+          ) : sorted.slice(0,40).map(t=>{
+            const brand=BRANDS.find(b=>b.id===t.brand);
+            const due=relDate(t.due);
+            return (
+              <div key={t.id} className="task-row">
+                <button className="task-check" onClick={()=>toggleTask(t.key,t.id)} aria-label="Complete">
+                  <span className="task-check-circle"/>
+                </button>
 
-        {/* ── PROACTIVE BRAND SILENCE ALERTS ── */}
-        {(()=>{
-          const sevenDaysAgo=new Date(Date.now()-7*86400000).toISOString().split("T")[0];
-          const silentBrands=BRANDS.filter(b=>{
-            const bTasks=Object.entries(data.tasks).filter(([k])=>k.startsWith(b.id)).flatMap(([,v])=>v);
-            if(bTasks.length===0) return false;
-            return !bTasks.some(t=>(t.createdAt||"")>=sevenDaysAgo||(t.doneAt||"")>=sevenDaysAgo);
-          });
-          return silentBrands.length>0?(
-            <div style={{marginBottom:12,padding:"10px 14px",background:"#FFFBEB",border:"1px solid #FCD34D",borderRadius:10,display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontSize:16}}>👁</span>
-              <div style={{flex:1}}>
-                <div style={{fontSize:12.5,fontWeight:600,color:"#92400E"}}>No activity in 7+ days</div>
-                <div style={{fontSize:11,color:"#B45309",marginTop:2}}>
-                  {silentBrands.map(b=>`${b.emoji} ${b.name}`).join("  ·  ")}
+                <div className="task-row-main" onClick={()=>{setActiveBrand(t.brand);setBrandTab(t.tab||"Miscellaneous");setView("brand");}}>
+                  <div className="task-row-title-line">
+                    {t.priority==="urgent" && <span className="task-pri-urgent">●</span>}
+                    {t.priority==="high" && <span className="task-pri-high">●</span>}
+                    <span className="task-row-title">{t.title}</span>
+                  </div>
+                  <div className="task-row-meta">
+                    {brand && (
+                      <span className="task-brand-chip" style={{background:brand.color+"15",color:brand.color}}>
+                        {brand.name}
+                      </span>
+                    )}
+                    {t.tab && t.tab!=="Miscellaneous" && (
+                      <span className="task-tab-chip">{t.tab}</span>
+                    )}
+                    {due && (
+                      <span className={`task-due-text ${due.cls}`}>{due.text}</span>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <button className="btn btn-ghost btn-sm" style={{fontSize:10,color:"#92400E",flexShrink:0}}
-                onClick={()=>{setActiveBrand(silentBrands[0].id);setView("brand");}}>
-                Open →
-              </button>
-            </div>
-          ):null;
-        })()}
 
-        {/* ── ALERT STRIP ── */}
-        {(overdueTasks.length>0||dueTodayTasks.length>0||activeAlerts.length>0)&&(
-          <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
-            {overdueTasks.length>0&&(
-              <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",background:"#FEF2F2",border:"1px solid #FCA5A5",borderRadius:10,cursor:"pointer",flex:1,minWidth:180}}
-                onClick={()=>setTaskFilter("overdue")}>
-                <span style={{fontSize:16}}>🔥</span>
-                <div>
-                  <div style={{fontSize:12.5,fontWeight:600,color:"#DC2626"}}>{overdueTasks.length} overdue task{overdueTasks.length>1?"s":""}</div>
-                  <div style={{fontSize:11,color:"#EF4444"}}>{overdueTasks.slice(0,2).map(t=>t.title).join(", ")}{overdueTasks.length>2?` +${overdueTasks.length-2} more`:""}</div>
+                <div className="task-row-actions">
+                  <button className="task-snooze-btn" onClick={()=>snoozeTask(t.key,t.id,1)} title="Snooze 1 day">+1d</button>
+                  <button className="task-snooze-btn" onClick={()=>snoozeTask(t.key,t.id,7)} title="Snooze 1 week">+1w</button>
                 </div>
               </div>
-            )}
-            {dueTodayTasks.length>0&&(
-              <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",background:"#FFFBEB",border:"1px solid #FCD34D",borderRadius:10,flex:1,minWidth:180}}>
-                <span style={{fontSize:16}}>⏰</span>
-                <div>
-                  <div style={{fontSize:12.5,fontWeight:600,color:"#D97706"}}>{dueTodayTasks.length} due today</div>
-                  <div style={{fontSize:11,color:"#F59E0B"}}>{dueTodayTasks.slice(0,2).map(t=>t.title).join(", ")}{dueTodayTasks.length>2?` +${dueTodayTasks.length-2} more`:""}</div>
-                </div>
-              </div>
-            )}
-            {todayReminders.length>0&&(
-              <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",background:"#F5F3FF",border:"1px solid #C4B5FD",borderRadius:10,flex:1,minWidth:180}}>
-                <span style={{fontSize:16}}>🔔</span>
-                <div>
-                  <div style={{fontSize:12.5,fontWeight:600,color:"#7C3AED"}}>{todayReminders.length} reminder{todayReminders.length>1?"s":""} today</div>
-                  <div style={{fontSize:11,color:"#8B5CF6"}}>{todayReminders.map(r=>r.title).join(", ")}</div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── AI BRIEFING ── */}
-        <div className="briefing-card" style={{marginBottom:16}}>
-          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16}}>
-            <div style={{flex:1}}>
-              <div className="briefing-title">◎ AI DAILY BRIEFING</div>
-              {insightLoading["briefing"]
-                ?<div style={{color:"var(--ink-3)",fontSize:12.5,display:"flex",alignItems:"center",gap:8}}><span className="typing-dots"><span/><span/><span/></span> Analysing your situation...</div>
-                :insights["briefing"]
-                  ?<div className="briefing-text">{insights["briefing"]}</div>
-                  :insights["autoTop"]
-                    ?<div className="briefing-text">🤖 <strong>Top priority:</strong> {insights["autoTop"]}{insights["autoBrand"]&&<><br/><span style={{color:"var(--ink-3)"}}>📊 {insights["autoBrand"]}</span></>}{insights["autoSuggest"]&&<><br/><span style={{color:"var(--green)"}}>💡 {insights["autoSuggest"]}</span></>}</div>
-                    :<div style={{color:"var(--ink-4)",fontSize:12.5,display:"flex",alignItems:"center",gap:8}}><span className="typing-dots"><span/><span/><span/></span> AI analysing your data...</div>
-              }
-              {insights["autoAlerts"]?.length>0&&(
-                <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:4}}>
-                  {insights["autoAlerts"].map((a,i)=>(
-                    <div key={i} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 10px",background:"rgba(220,38,38,.07)",border:"1px solid rgba(220,38,38,.2)",borderRadius:7,fontSize:12,color:"#DC2626"}}>
-                      <span>⚠</span><span>{a}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          <div style={{marginTop:12,display:"flex",gap:8,flexWrap:"wrap"}}>
-            {[
-              {k:"briefing",label:insights["briefing"]?"↻ Refresh":"▶ Briefing",prompt:`Sharp executive morning briefing for someone managing 6 betting/gaming brands. They have ${pendingTasks.length} pending tasks, ${overdueTasks.length} overdue, score is ${score}/100. Top risks, today's priority, one strategic insight. 3 sentences max.`},
-              {k:"plan",label:"📋 Action Plan",prompt:`Create a ranked action plan for today. ${overdueTasks.length} overdue tasks, ${dueTodayTasks.length} due today, ${urgentTasks.length} urgent. List top 5 by urgency and brand impact. Specific task/brand names.`},
-              {k:"risks",label:"⚠ Risks",prompt:`Top 3 risks right now based on: ${overdueTasks.length} overdue, score ${score}. Each risk: brand, problem, immediate fix. Be blunt.`},
-              {k:"forecast",label:"📈 Forecast",prompt:`Forecast how this week ends based on current data: ${stats.weekDone} done this week, ${pendingTasks.length} pending, ${overdueTasks.length} overdue. Will targets be hit? 2 sentences.`},
-            ].map(b=>(
-              <button key={b.k} className="ai-btn" disabled={insightLoading[b.k]} onClick={()=>fetchInsight(b.k,b.prompt)}>
-                {insightLoading[b.k]?"...":b.label}
-              </button>
-            ))}
-          </div>
-          {(insights["plan"]||insights["risks"]||insights["forecast"])&&(
-            <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid rgba(79,70,229,.15)",display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
-              {["plan","risks","forecast"].filter(k=>insights[k]).map(k=>(
-                <div key={k}>
-                  <div style={{fontFamily:"Martian Mono,monospace",fontSize:7.5,color:k==="risks"?"#DC2626":"#4F46E5",letterSpacing:1.5,marginBottom:5,textTransform:"uppercase"}}>{k==="plan"?"TODAY'S PLAN":k==="risks"?"RISK ANALYSIS":"WEEK FORECAST"}</div>
-                  <div style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.75}}>{insights[k]}</div>
-                </div>
-              ))}
+            );
+          })}
+          {sorted.length>40 && (
+            <div className="dash-list-more">
+              + {sorted.length-40} more · open a brand to see all
             </div>
           )}
         </div>
 
-        {/* ── KPI GRID ── */}
-        <div className="g4 mb14">
-          {[
-            {label:"SCORE",val:score,sub:scoreHistory.length>1?`${score>scoreHistory[scoreHistory.length-2]?.score?"↑":"↓"} vs yesterday`:"Today's score",color:"#4F46E5",cls:"purple"},
-            {label:"TODAY",val:`${stats.todayDone}/${stats.todayTotal}`,sub:"Tasks done today",color:"#059669",cls:"green"},
-            {label:"OVERDUE",val:stats.overdue,sub:stats.overdue>0?"Act now":"All clear ✓",color:stats.overdue>0?"#DC2626":"#059669",cls:stats.overdue>0?"red":"green"},
-            {label:"STREAK",val:`${streak.current||0}🔥`,sub:`Best: ${streak.best||0} days`,color:"#F59E0B",cls:"amber"},
-          ].map(k=>(
-            <div key={k.label} className={`kpi-card ${k.cls}`}>
-              <span className="kpi-label-top">{k.label}</span>
-              <span className="kpi-val" style={{color:k.color,fontSize:32}}>{k.val}</span>
-              <div className="kpi-sub">{k.sub}</div>
-            </div>
-          ))}
-        </div>
+        {/* Expandable extras */}
+        <details className="dash-extras">
+          <summary>Insights, alerts &amp; analytics</summary>
+          <div className="dash-extras-content">
 
-        {/* ── BRAND PULSE + MOOD ── */}
-        <div className="g2 mb14" style={{gridTemplateColumns:"2fr 1fr"}}>
+            {/* Brand silence alerts */}
+            {(()=>{
+              const sevenDaysAgo=new Date(Date.now()-7*86400000).toISOString().split("T")[0];
+              const silent=BRANDS.filter(b=>{
+                const bTasks=Object.entries(data.tasks).filter(([k])=>k.startsWith(b.id)).flatMap(([,v])=>v);
+                if(bTasks.length===0) return false;
+                return !bTasks.some(t=>(t.createdAt||"")>=sevenDaysAgo||(t.doneAt||"")>=sevenDaysAgo);
+              });
+              return silent.length>0 ? (
+                <div className="dash-section">
+                  <div className="dash-section-label">Brands gone quiet</div>
+                  <div className="dash-section-body">
+                    {silent.map(b=>(
+                      <button key={b.id} className="dash-silent-row" onClick={()=>{setActiveBrand(b.id);setView("brand");}}>
+                        <span className="dash-silent-dot" style={{background:b.color}}/>
+                        <span>{b.name}</span>
+                        <span className="dash-silent-meta">No activity in 7+ days →</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null;
+            })()}
 
-          {/* Brand table */}
-          <div className="card" style={{padding:0,overflow:"hidden"}}>
-            <div style={{padding:"12px 16px",borderBottom:"1px solid var(--line)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span className="card-title">BRAND PULSE</span>
-              <button className="ai-btn" style={{fontSize:10,padding:"3px 10px"}} disabled={insightLoading["brand_summary"]}
-                onClick={()=>fetchInsight("brand_summary","In 2 sentences: which brands need intervention now and the single most important action.")}>
-                {insightLoading["brand_summary"]?"...":"◎ AI Read"}
-              </button>
+            {/* Score */}
+            <div className="dash-section">
+              <div className="dash-section-label">Productivity score</div>
+              <div className="dash-score-row">
+                <div className="dash-score-num">{score}</div>
+                <div className="dash-score-bar"><div className="dash-score-bar-fill" style={{width:`${score}%`,background:score>=70?"#059669":score>=50?"#D97706":"#DC2626"}}/></div>
+                <button className="dash-score-toggle" onClick={()=>setShowScoreBreakdown(p=>!p)}>{showScoreBreakdown?"Hide":"Why?"}</button>
+              </div>
+              {showScoreBreakdown && (()=>{
+                const s=getStats(); const bs2=getBrandStats();
+                const items=[
+                  {label:"Task completion",pts:Math.round(s.rate*0.4),max:40},
+                  {label:"Done today",pts:s.todayTotal>0?Math.round((s.todayDone/s.todayTotal)*25):10,max:25},
+                  {label:"Low overdue",pts:Math.max(0,20-(s.overdue*5)),max:20},
+                  {label:"Active brands",pts:Math.round((bs2.filter(b=>b.tasks>0).length/BRANDS.length)*15),max:15},
+                ];
+                return (
+                  <div className="dash-score-breakdown">
+                    {items.map(it=>(
+                      <div key={it.label} className="dash-score-item">
+                        <span>{it.label}</span>
+                        <span className="dash-score-pts">{it.pts}/{it.max}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
-            {insights["brand_summary"]&&(
-              <div style={{padding:"9px 16px",background:"var(--ai-bg)",borderBottom:"1px solid var(--ai-border)"}}>
-                <div style={{fontFamily:"Martian Mono,monospace",fontSize:7.5,color:"var(--indigo)",letterSpacing:1.5,marginBottom:3,textTransform:"uppercase"}}>◎ AI TAKE</div>
-                <div style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.65}}>{insights["brand_summary"]}</div>
+
+            {/* AI Briefing */}
+            {insights.briefing && (
+              <div className="dash-section">
+                <div className="dash-section-label">Morning briefing</div>
+                <div className="dash-briefing-text">{insights.briefing}</div>
               </div>
             )}
-            {bStats.map((b,i)=>{
-              const temp=brandTemp(b,Object.entries(data.tasks).filter(([k])=>k.startsWith(b.id)).flatMap(([,v])=>v));
-              return (
-                <div key={b.id} onClick={()=>{setActiveBrand(b.id);setView("brand");}}
-                  style={{display:"grid",gridTemplateColumns:"2fr .5fr .5fr 1fr",padding:"10px 16px",borderBottom:i<5?"1px solid var(--surface)":"none",alignItems:"center",cursor:"pointer",transition:"all .12s",borderLeft:`3px solid ${b.color}30`}}
-                  onMouseEnter={e=>{e.currentTarget.style.background="var(--surface)";e.currentTarget.style.borderLeftColor=b.color;}}
-                  onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.borderLeftColor=b.color+"30";}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:15}}>{b.emoji}</span>
-                    <div>
-                      <div style={{fontSize:12.5,fontWeight:600,color:b.color,lineHeight:1}}>{b.name}</div>
-                      <div style={{fontSize:9.5,color:"var(--ink-4)",marginTop:1}}>{b.done}/{b.tasks} done · {temp.label}</div>
-                    </div>
-                    {b.overdue>0&&<span className="badge badge-red" style={{marginLeft:4}}>{b.overdue}▲</span>}
-                  </div>
-                  <span style={{fontFamily:"Martian Mono,monospace",fontSize:10.5,fontWeight:700,color:b.hg?.color||"var(--ink-4)"}}>{b.hg?.grade||"—"}</span>
-                  <span style={{fontFamily:"Martian Mono,monospace",fontSize:10,color:temp.color}}>{temp.temp}°</span>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <div style={{flex:1,height:5,background:"var(--surface)",borderRadius:99,overflow:"hidden"}}>
-                      <div style={{height:"100%",width:`${b.rate}%`,background:b.color,borderRadius:99,transition:"width 1.2s ease"}}/>
-                    </div>
-                    <span style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,color:b.color,width:28,textAlign:"right",fontWeight:600}}>{b.rate}%</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Right column: mood + quick stats */}
-          <div style={{display:"flex",flexDirection:"column",gap:12}}>
-
-            {/* Quick stats */}
-            <div className="card" style={{padding:"14px 16px",flex:1}}>
-              <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"var(--ink-4)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:12}}>QUICK STATS</div>
-              {[
-                {label:"This week",val:`${stats.weekDone} done`,color:"#2563EB"},
-                {label:"Time logged",val:fmtDur(stats.totalTimeSpent),color:"#7C3AED"},
-                {label:"Notes",val:data.notes.length,color:"#D97706"},
-                {label:"Goals",val:`${(data.goals||[]).filter(g=>!g.achieved).length} active`,color:"#059669"},
-                {label:"Task debt",val:allTasks.filter(t=>!t.done&&taskAgeDays(t.createdAt)>14).length>0?`${allTasks.filter(t=>!t.done&&taskAgeDays(t.createdAt)>14).length} old`:"Clear",color:allTasks.filter(t=>!t.done&&taskAgeDays(t.createdAt)>14).length>0?"#DC2626":"#059669"},
-              ].map(s=>(
-                <div key={s.label} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid var(--surface)"}}>
-                  <span style={{fontSize:12,color:"var(--ink-3)"}}>{s.label}</span>
-                  <span style={{fontFamily:"Martian Mono,monospace",fontSize:11,fontWeight:600,color:s.color}}>{s.val}</span>
-                </div>
-              ))}
-              <button className="btn btn-ghost btn-xs w-full" style={{marginTop:10,fontSize:10}} onClick={()=>setView("analytics")}>Full Analytics →</button>
-            </div>
-          </div>
-        </div>
-
-        {/* ── ACTIVITY CHART + NARRATIVE ── */}
-        <div className="g2 mb14">
-          <div className="card">
-            <div className="card-header">
-              <span className="card-title">7-DAY ACTIVITY</span>
-              <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                {[["#2563EB","Added"],["#059669","Done"]].map(([c,l])=><div key={l} style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:7,height:7,borderRadius:2,background:c}}/><span style={{fontSize:10,color:"var(--ink-4)"}}>{l}</span></div>)}
-                <button className="ai-btn" style={{fontSize:10,padding:"3px 8px"}} disabled={insightLoading["weekly"]} onClick={()=>fetchInsight("weekly","Analyse my 7-day task activity pattern. What does it reveal about my work habits? Any red flags? 2 sentences.")}>◎</button>
+            {!insights.briefing && (
+              <div className="dash-section">
+                <button className="dash-ai-btn" onClick={()=>fetchInsight("briefing","Give me a sharp executive morning briefing. Reference specific brand names and task counts. 2 sentences max.")}>
+                  Generate AI briefing
+                </button>
               </div>
-            </div>
-            {insights["weekly"]&&<div className="ai-panel" style={{marginBottom:10}}><div className="ai-panel-text">{insights["weekly"]}</div></div>}
-            <ResponsiveContainer width="100%" height={120}>
-              <BarChart data={chartData} barGap={2}>
-                <CartesianGrid vertical={false} stroke="var(--surface)"/>
-                <XAxis dataKey="day" tick={{fontFamily:"Martian Mono,monospace",fontSize:9,fill:"var(--ink-4)"}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fontFamily:"Martian Mono,monospace",fontSize:9,fill:"var(--ink-4)"}} axisLine={false} tickLine={false} allowDecimals={false}/>
-                <Tooltip content={<CT/>}/>
-                <Bar dataKey="added" name="Added" fill="#2563EB" radius={[3,3,0,0]}/>
-                <Bar dataKey="done"  name="Done"  fill="#059669" radius={[3,3,0,0]}/>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+            )}
 
-          {/* Recent activity */}
-          <div className="card">
-            <div className="card-header"><span className="card-title">RECENT ACTIVITY</span><button className="btn btn-ghost btn-xs" onClick={()=>setView("timelog")}>All →</button></div>
-            {(data.timelog||[]).filter(l=>l.type!=="session_start").slice(0,6).map(l=>{
-              const lt=LOG_TYPES[l.type]||{color:"#9099B8"};
-              return (
-                <div key={l.id} style={{display:"flex",gap:9,padding:"7px 0",borderBottom:"1px solid var(--surface)",alignItems:"flex-start"}}>
-                  <div style={{width:6,height:6,borderRadius:"50%",background:lt.color,flexShrink:0,marginTop:5}}/>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:12,color:"var(--ink)",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.title}</div>
-                    <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"var(--ink-4)",marginTop:1}}>{fmtDateTime(l.ts)}</div>
-                  </div>
-                </div>
-              );
-            })}
-            {!(data.timelog||[]).filter(l=>l.type!=="session_start").length&&<div style={{fontSize:12,color:"var(--ink-4)",textAlign:"center",padding:"20px 0"}}>No activity logged yet</div>}
           </div>
-        </div>
-
-        {/* ── SCORE HISTORY ── */}
-        {scoreHistory.length>2&&(
-          <div className="card mb14">
-            <div className="card-header">
-              <span className="card-title">SCORE HISTORY</span>
-              <button className="ai-btn" style={{fontSize:10,padding:"3px 8px"}} disabled={insightLoading["score_trend"]}
-                onClick={()=>fetchInsight("score_trend",`My PRODASH scores over ${scoreHistory.length} days: ${scoreHistory.slice(-14).map(h=>h.score).join(",")}. Analyse the trend, identify what's driving changes, and give me one actionable insight.`)}>
-                {insightLoading["score_trend"]?"...":"◎ Trend"}
-              </button>
-            </div>
-            {insights["score_trend"]&&<div className="ai-panel" style={{marginBottom:10}}><div className="ai-panel-text">{insights["score_trend"]}</div></div>}
-            <ResponsiveContainer width="100%" height={80}>
-              <LineChart data={scoreHistory.slice(-30)}>
-                <CartesianGrid vertical={false} stroke="var(--surface)"/>
-                <XAxis dataKey="date" tick={false} axisLine={false} tickLine={false}/>
-                <YAxis domain={[0,100]} tick={{fontFamily:"Martian Mono,monospace",fontSize:8,fill:"var(--ink-4)"}} axisLine={false} tickLine={false}/>
-                <Tooltip content={<CT/>}/>
-                <Line type="monotone" dataKey="score" stroke="#4F46E5" strokeWidth={2} dot={false}/>
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
+        </details>
 
       </div>
     );
   };
-
 
   const renderBrand=()=>{
     if(!currentBrand) return null;
