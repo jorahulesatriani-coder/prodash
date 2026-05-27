@@ -30,13 +30,13 @@ export class ErrorBoundary extends React.Component {
 //  CONSTANTS
 // ══════════════════════════════════════════════════════════
 const BRANDS = [
-  {id:"goldbet", name:"Goldbet",       color:"#B45309",bg:"#FFFBEB",emoji:"🥇"},
-  {id:"ultrabet",name:"Ultrabet",      color:"#6D28D9",bg:"#F5F3FF",emoji:"⚡"},
-  {id:"boostbet",name:"BoostBet",      color:"#B91C1C",bg:"#FEF2F2",emoji:"🚀"},
-  {id:"allbets", name:"AllBets",       color:"#065F46",bg:"#ECFDF5",emoji:"🎯"},
-  {id:"betgold", name:"BetGold",       color:"#C2410C",bg:"#FFF7ED",emoji:"💰"},
-  {id:"techdev", name:"TechDev",       color:"#1E40AF",bg:"#EFF6FF",emoji:"💻"},
-  {id:"misc",    name:"Miscellaneous", color:"#6B7280",bg:"#F9FAFB",emoji:"📋"},
+  {id:"goldbet", name:"Goldbet",       color:"#B45309",bg:"#FFFBEB",emoji:""},
+  {id:"ultrabet",name:"Ultrabet",      color:"#6D28D9",bg:"#F5F3FF",emoji:""},
+  {id:"boostbet",name:"BoostBet",      color:"#B91C1C",bg:"#FEF2F2",emoji:""},
+  {id:"allbets", name:"AllBets",       color:"#065F46",bg:"#ECFDF5",emoji:""},
+  {id:"betgold", name:"BetGold",       color:"#C2410C",bg:"#FFF7ED",emoji:""},
+  {id:"techdev", name:"TechDev",       color:"#1E40AF",bg:"#EFF6FF",emoji:""},
+  {id:"misc",    name:"Miscellaneous", color:"#6B7280",bg:"#F9FAFB",emoji:""},
 ];
 const BRAND_TABS  = ["Reporting","Compliance","Accounting","Miscellaneous"];
 const PRIORITIES  = [{key:"low",label:"Low"},{key:"medium",label:"Medium"},{key:"high",label:"High"},{key:"urgent",label:"Urgent"}];
@@ -98,7 +98,6 @@ const NAV_PRIMARY = [
   {id:"analytics",icon:"◉",label:"Analytics"},
 ];
 const NAV_MORE = [
-  {id:"braindump",icon:"≡",label:"Brain Dump"},
   {id:"goals",    icon:"◇",label:"Goals"},
   {id:"decisions",icon:"§",label:"Decisions"},
   {id:"journal",  icon:"▤",label:"Journal"},
@@ -2669,13 +2668,27 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
           ))}
         </div>
 
-        {/* TASK LIST — the heart of the dashboard */}
-        <div className="dash-list">
-          {sorted.length===0 ? (
-            <div className="dash-empty">
-              {dashBrandFilter==="all" ? "No pending tasks. Type one above to begin." : `Nothing pending for ${BRANDS.find(b=>b.id===dashBrandFilter)?.name||"this brand"}.`}
-            </div>
-          ) : sorted.slice(0,40).map(t=>{
+        {/* TASK LIST — grouped by Overdue / Today / This week / Later */}
+        {(()=>{
+          const inWeek = (d) => {
+            if(!d) return false;
+            const days=Math.ceil((new Date(d)-new Date(today))/86400000);
+            return days>=2 && days<=7;
+          };
+          const grouped = {
+            overdue: sorted.filter(t=>t.due&&t.due<today),
+            today: sorted.filter(t=>t.due===today),
+            soon: sorted.filter(t=>t.due===tomorrow || inWeek(t.due)),
+            later: sorted.filter(t=>!t.due || (t.due!==today && t.due!==tomorrow && !inWeek(t.due) && t.due>=today)),
+          };
+          const sections = [
+            {key:"overdue", label:"Overdue", items:grouped.overdue, cls:"sec-overdue"},
+            {key:"today", label:"Today", items:grouped.today, cls:"sec-today"},
+            {key:"soon", label:"This week", items:grouped.soon, cls:""},
+            {key:"later", label:"Later", items:grouped.later, cls:""},
+          ].filter(s=>s.items.length>0);
+
+          const renderRow = (t) => {
             const brand=BRANDS.find(b=>b.id===t.brand);
             const due=relDate(t.due);
             return (
@@ -2683,7 +2696,6 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
                 <button className="task-check" onClick={()=>toggleTask(t.key,t.id)} aria-label="Complete">
                   <span className="task-check-circle"/>
                 </button>
-
                 <div className="task-row-main" onClick={()=>{setActiveBrand(t.brand);setBrandTab(t.tab||"Miscellaneous");setView("brand");}}>
                   <div className="task-row-title-line">
                     {t.priority==="urgent" && <span className="task-pri-urgent">●</span>}
@@ -2704,20 +2716,69 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
                     )}
                   </div>
                 </div>
-
                 <div className="task-row-actions">
                   <button className="task-snooze-btn" onClick={()=>snoozeTask(t.key,t.id,1)} title="Snooze 1 day">+1d</button>
                   <button className="task-snooze-btn" onClick={()=>snoozeTask(t.key,t.id,7)} title="Snooze 1 week">+1w</button>
                 </div>
               </div>
             );
-          })}
-          {sorted.length>40 && (
-            <div className="dash-list-more">
-              + {sorted.length-40} more · open a brand to see all
+          };
+
+          if(sorted.length===0){
+            return (
+              <div className="dash-list">
+                <div className="dash-empty">
+                  {dashBrandFilter==="all" ? "Nothing pending. Type something above." : `Nothing pending for ${BRANDS.find(b=>b.id===dashBrandFilter)?.name||"this brand"}.`}
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div>
+              {sections.map(sec=>(
+                <div key={sec.key} className="dash-section-block">
+                  <div className={`dash-section-head ${sec.cls}`}>
+                    <span>{sec.label}</span>
+                    <span className="dash-section-count">{sec.items.length}</span>
+                  </div>
+                  <div className="dash-list dash-list-section">
+                    {sec.items.slice(0,30).map(renderRow)}
+                    {sec.items.length>30 && (
+                      <div className="dash-list-more">+ {sec.items.length-30} more</div>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
-        </div>
+          );
+        })()}
+
+        {/* DONE TODAY FOOTER */}
+        {(()=>{
+          const doneToday = allTasksFlat.filter(t=>t.done&&t.doneAt?.startsWith(today));
+          if(doneToday.length===0) return null;
+          return (
+            <details className="dash-done-today">
+              <summary>
+                <span className="dash-done-icon">✓</span>
+                <span>{doneToday.length} completed today</span>
+                <span className="dash-done-expand">view</span>
+              </summary>
+              <div className="dash-done-list">
+                {doneToday.slice(0,20).map(t=>{
+                  const brand=BRANDS.find(b=>b.id===t.brand);
+                  return (
+                    <div key={t.id} className="dash-done-row">
+                      <span className="dash-done-check">✓</span>
+                      <span className="dash-done-title">{t.title}</span>
+                      {brand && <span className="task-brand-chip" style={{background:brand.color+"15",color:brand.color,fontSize:10}}>{brand.name}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          );
+        })()}
 
         {/* Expandable extras */}
         <details className="dash-extras">
@@ -3756,7 +3817,7 @@ SMART ALLOCATION RULES:
           </div>
           <div style={{fontSize:20,fontWeight:700,color:"#fff",marginBottom:4}}>Today: {stats.todayDone} tasks done</div>
           <div style={{fontSize:13,color:"rgba(255,255,255,.8)",marginBottom:6}}>Across {bStats.filter(b=>b.done>0).length} brands · {fmtDur(stats.totalTimeSpent)} tracked</div>
-          {streak.current>0&&<div style={{fontSize:13,color:"rgba(255,255,255,.9)",fontWeight:600}}>🔥 {streak.current} day streak — keep it going!</div>}
+          {false&&streak.current>0&&<div style={{fontSize:13,color:"rgba(255,255,255,.9)",fontWeight:600}}>🔥 {streak.current} day streak — keep it going!</div>}
           <button onClick={()=>{setEodDismissed(true);setView("journal");}} style={{marginTop:12,width:"100%",padding:"8px",background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.3)",borderRadius:8,color:"#fff",cursor:"pointer",fontSize:13,fontWeight:500}}>📖 Write today's journal entry →</button>
         </div>
       )}
@@ -3801,10 +3862,10 @@ SMART ALLOCATION RULES:
               <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"rgba(255,255,255,.25)",letterSpacing:2,marginTop:4,textTransform:"uppercase"}}>overdue</div>
             </div>
             <div style={{width:1,height:32,background:"rgba(255,255,255,.1)"}}/>
-            <div style={{textAlign:"center"}}>
+            {false&&<div style={{textAlign:"center"}}>
               <div style={{fontFamily:"Martian Mono,monospace",fontSize:22,fontWeight:700,color:"#F59E0B"}}>{streak.current||0}</div>
               <div style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:"rgba(255,255,255,.25)",letterSpacing:2,marginTop:4,textTransform:"uppercase"}}>day streak 🔥</div>
-            </div>
+            </div>}
           </div>
         </div>
       )}
