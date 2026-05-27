@@ -89,21 +89,24 @@ const loadMoods      = () => { try{return JSON.parse(localStorage.getItem(MOOD_K
 const saveMoods      = m => { try{localStorage.setItem(MOOD_KEY,JSON.stringify(m));}catch{} };
 const loadAcct       = () => { try{return JSON.parse(localStorage.getItem(ACCT_KEY)||"{}")||{};}catch{return{};} };
 const saveAcct       = a => { try{localStorage.setItem(ACCT_KEY,JSON.stringify(a));}catch{} };
-const NAV_ITEMS = [
+const NAV_PRIMARY = [
   {id:"dashboard",icon:"◈",label:"Dashboard"},
+  {id:"pa",       icon:"◎",label:"PA Assistant"},
   {id:"warroom",  icon:"⚔",label:"War Room"},
-  {id:"timelog",  icon:"◷",label:"Time Log"},
+  {id:"weekplan", icon:"◫",label:"This Week"},
+  {id:"calendar", icon:"⏱",label:"Calendar"},
   {id:"analytics",icon:"◉",label:"Analytics"},
-  {id:"calendar", icon:"◫",label:"Calendar"},
-  {id:"pinboard", icon:"◆",label:"Pin Board"},
-  {id:"ai",       icon:"◎",label:"AI Assistant"},
-  {id:"journal",  icon:"📖",label:"Work Journal"},
-  {id:"goals",    icon:"🎯",label:"Goals"},
-  {id:"decisions",icon:"⚖",label:"Decision Log"},
-  {id:"pa",       icon:"🤖",label:"PA Assistant"},
-  {id:"braindump",icon:"⚡",label:"Brain Dump"},
-  {id:"weekplan", icon:"📅",label:"Weekly Plan"},
 ];
+const NAV_MORE = [
+  {id:"braindump",icon:"≡",label:"Brain Dump"},
+  {id:"goals",    icon:"◇",label:"Goals"},
+  {id:"decisions",icon:"§",label:"Decisions"},
+  {id:"journal",  icon:"▤",label:"Journal"},
+  {id:"timelog",  icon:"◷",label:"Time Log"},
+  {id:"pinboard", icon:"◆",label:"Pin Board"},
+];
+// Combined for view lookups - DO NOT remove
+const NAV_ITEMS = [...NAV_PRIMARY, ...NAV_MORE];
 const LOG_TYPES = {
   task_added:   {color:"#2563EB",label:"Task Added"},
   task_done:    {color:"#059669",label:"Completed"},
@@ -1432,8 +1435,10 @@ export default function App() {
   const [selectedTasks,setSelectedTasks] = useState(new Set());
   const [focusMode,setFocusMode]   = useState(null); // {task, key}
   const [showScoreBreakdown,setShowScoreBreakdown] = useState(false);
+  const [showMoreNav,setShowMoreNav] = useState(false);
   const [quickAddTitle,setQuickAddTitle] = useState("");
   const [quickAddDue,setQuickAddDue]     = useState("");
+  const [dashBrandFilter,setDashBrandFilter] = useState("all");
   const [focusSecs,setFocusSecs]   = useState(POMODORO_MINS*60);
   const [focusRunning,setFocusRunning] = useState(false);
   const [focusStarted,setFocusStarted] = useState(null);
@@ -1778,6 +1783,8 @@ export default function App() {
     const pending = allT.filter(t=>!t.done).length;
     const sc = getScore();
     // Detect silent brands (nothing logged in 7+ days)
+    const todayDone = allT.filter(t=>t.done&&t.doneAt?.startsWith(today)).length;
+    const todayTotal = allT.filter(t=>t.createdAt?.startsWith(today)||t.due===today).length;
     const sevenDaysAgo = new Date(Date.now()-7*86400000).toISOString().split("T")[0];
     const brandAlerts = BRANDS.filter(b=>{
       const bTasks = Object.entries(data.tasks)
@@ -1789,7 +1796,8 @@ export default function App() {
     navigator.serviceWorker.ready.then(reg=>{
       reg.active?.postMessage({
         type:"UPDATE_BRIEFING",
-        overdue, todayDue, pending, score:sc, brandAlerts
+        overdue, todayDue, pending, score:sc, brandAlerts,
+        todayDone, todayTotal
       });
     }).catch(()=>{});
   },[data, getScore]);
@@ -2044,6 +2052,18 @@ Return ONLY a valid JSON object (no markdown, no explanation):
     cancelNotification(`task_${id}_early`);
     showToast("Task deleted","warning");
   },[addLog,showToast]);
+
+  const snoozeTask=useCallback((key,id,days)=>{
+    setData(p=>{
+      const tasks=(p.tasks[key]||[]).map(t=>{
+        if(t.id!==id) return t;
+        const d=new Date(); d.setDate(d.getDate()+days);
+        return {...t,due:d.toISOString().split("T")[0]};
+      });
+      return {...p,tasks:{...p.tasks,[key]:tasks}};
+    });
+    showToast(`Snoozed ${days===1?"1 day":days===3?"3 days":days===7?"1 week":days+" days"}`);
+  },[showToast]);
 
   const startTimer=useCallback((taskId,title,brand,tab)=>{
     setActiveTimers(p=>({...p,[taskId]:Date.now()}));
@@ -2537,7 +2557,11 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
 
   const renderDashboard=()=>{
     const today=todayStr();
-    const allTasks=Object.values(data.tasks).flat();
+    const allTasksRaw=Object.values(data.tasks).flat();
+    // Filter by selected brand if not "all"
+    const allTasks = dashBrandFilter==="all"
+      ? allTasksRaw
+      : Object.entries(data.tasks).filter(([k])=>k.startsWith(dashBrandFilter+"_")).flatMap(([,v])=>v);
     const overdueTasks=allTasks.filter(t=>!t.done&&t.due&&t.due<today);
     const dueTodayTasks=allTasks.filter(t=>!t.done&&t.due===today);
     const urgentTasks=allTasks.filter(t=>!t.done&&t.priority==="urgent");
@@ -2647,6 +2671,21 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
           </div>
           );
         })()}
+
+        {/* ── BRAND FILTER ── */}
+        <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+          <button onClick={()=>setDashBrandFilter("all")}
+            style={{padding:"5px 11px",borderRadius:99,border:dashBrandFilter==="all"?"1px solid var(--ink)":"1px solid var(--line)",background:dashBrandFilter==="all"?"var(--ink)":"transparent",color:dashBrandFilter==="all"?"var(--white)":"var(--ink-3)",fontSize:11,fontWeight:500,cursor:"pointer"}}>
+            All brands
+          </button>
+          {BRANDS.map(b=>(
+            <button key={b.id} onClick={()=>setDashBrandFilter(b.id)}
+              style={{padding:"5px 11px",borderRadius:99,border:`1px solid ${dashBrandFilter===b.id?b.color:"var(--line)"}`,background:dashBrandFilter===b.id?b.color:"transparent",color:dashBrandFilter===b.id?"#fff":b.color,fontSize:11,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+              <span style={{width:7,height:7,borderRadius:99,background:dashBrandFilter===b.id?"#fff":b.color,display:"inline-block"}}/>
+              {b.name}
+            </button>
+          ))}
+        </div>
 
         {/* ── MISSION OF THE DAY ── */}
         {topMission&&(
@@ -2993,11 +3032,17 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
               </div>
             )}
           </div>
-          <div style={{display:"flex",gap:4,alignItems:"flex-start"}}>
-            {!t.done&&<button className="btn btn-ghost btn-xs" title="Focus Mode" onClick={()=>startFocus(t,key)} style={{fontSize:12}}>🎯</button>}
+          <div style={{display:"flex",gap:3,alignItems:"flex-start"}}>
+            {!t.done&&(
+              <div style={{display:"flex",gap:2,marginRight:4}} title="Snooze">
+                <button className="btn btn-ghost btn-xs" onClick={()=>snoozeTask(key,t.id,1)} style={{fontSize:10,padding:"3px 7px",minWidth:0}}>+1d</button>
+                <button className="btn btn-ghost btn-xs" onClick={()=>snoozeTask(key,t.id,3)} style={{fontSize:10,padding:"3px 7px",minWidth:0}}>+3d</button>
+                <button className="btn btn-ghost btn-xs" onClick={()=>snoozeTask(key,t.id,7)} style={{fontSize:10,padding:"3px 7px",minWidth:0}}>+1w</button>
+              </div>
+            )}
             {!t.done&&(timerRunning
               ?<button className="btn btn-amber btn-xs" onClick={()=>stopTimer(t.id,t.title,activeBrand,brandTab,key)}>Stop</button>
-              :<button className="btn btn-ghost btn-xs" onClick={()=>startTimer(t.id,t.title,activeBrand,brandTab)}>⏱</button>
+              :<button className="btn btn-ghost btn-xs" onClick={()=>startTimer(t.id,t.title,activeBrand,brandTab)} style={{fontSize:11}}>◷</button>
             )}
             <button className="task-del" onClick={()=>deleteTask(key,t.id)}>✕</button>
           </div>
@@ -3991,8 +4036,19 @@ SMART ALLOCATION RULES:
           <div className="logo-date"><LiveClockSmall/></div>
         </div>
         <div className="nav-section">
-          <div className="nav-section-label">Navigate</div>
-          {NAV_ITEMS.map(item=>(
+          <div className="nav-section-label">Workspace</div>
+          {NAV_PRIMARY.map(item=>(
+            <div key={item.id} className={`nav-item${view===item.id&&!activeBrand?" active":""}`} onClick={()=>{setView(item.id);setActiveBrand(null);setSidebarOpen(false);}}>
+              <span className="nav-icon">{item.icon}</span>{item.label}
+            </div>
+          ))}
+        </div>
+        <div className="nav-section">
+          <div className="nav-section-label" style={{cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}} onClick={()=>setShowMoreNav(p=>!p)}>
+            <span>More</span>
+            <span style={{fontSize:9,color:"var(--ink-4)"}}>{showMoreNav?"−":"+"}</span>
+          </div>
+          {showMoreNav && NAV_MORE.map(item=>(
             <div key={item.id} className={`nav-item${view===item.id&&!activeBrand?" active":""}`} onClick={()=>{setView(item.id);setActiveBrand(null);setSidebarOpen(false);}}>
               <span className="nav-icon">{item.icon}</span>{item.label}
             </div>
@@ -4014,7 +4070,7 @@ SMART ALLOCATION RULES:
           })}
         </div>
         <div className="sidebar-stats">
-          {(streak.current||0)>0&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:"rgba(245,158,11,.1)",borderRadius:8,marginBottom:10,border:"1px solid rgba(245,158,11,.2)"}}>
+          {false&&(streak.current||0)>0&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:"rgba(245,158,11,.1)",borderRadius:8,marginBottom:10,border:"1px solid rgba(245,158,11,.2)"}}>
             <span style={{fontSize:16}}>🔥</span>
             <div><div style={{fontFamily:"Martian Mono,monospace",fontSize:13,fontWeight:700,color:"#F59E0B",lineHeight:1}}>{streak.current} day streak</div>
               <div style={{fontSize:10,color:"rgba(245,158,11,.6)",marginTop:2}}>Best: {streak.best||0} days</div>
