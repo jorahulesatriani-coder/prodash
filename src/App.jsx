@@ -1446,6 +1446,14 @@ export default function App() {
   const [quickAddBrand,setQuickAddBrand] = useState("");
   const [quickAddTab,setQuickAddTab]     = useState("Miscellaneous");
   const [quickAddPriority,setQuickAddPriority] = useState("medium");
+  const [aiSuggestions,setAiSuggestions] = useState(()=>{
+    try{
+      const cached=JSON.parse(localStorage.getItem("prodash_ai_suggestions")||"null");
+      if(cached && cached.date===new Date().toISOString().split("T")[0]) return cached.suggestions;
+    }catch{}
+    return [];
+  });
+  const [aiSuggestionsLoading,setAiSuggestionsLoading] = useState(false);
   const [dashBrandFilter,setDashBrandFilter] = useState("all");
   const [focusSecs,setFocusSecs]   = useState(POMODORO_MINS*60);
   const [focusRunning,setFocusRunning] = useState(false);
@@ -2473,6 +2481,201 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
     setAiLoading(false);
   };
 
+  // ══════════════════════════════════════════════════════════
+  //  AI SUGGESTION ENGINE — learns from history
+  // ══════════════════════════════════════════════════════════
+  
+  // Local pattern detection — finds recurring patterns without API call
+  const detectLocalPatterns = useCallback((brandFilter="all") => {
+    const allTasks = Object.entries(data.tasks).flatMap(([key,tasks])=>{
+      const [bid,...rest]=key.split("_");
+      return tasks.map(t=>({...t,brand:bid,tab:rest.join("_")}));
+    });
+    const scoped = brandFilter==="all" ? allTasks : allTasks.filter(t=>t.brand===brandFilter);
+    const done = scoped.filter(t=>t.done&&t.doneAt);
+    
+    if(done.length<3) return [];
+    
+    const today = new Date();
+    const todayStr_ = today.toISOString().split("T")[0];
+    const suggestions = [];
+    
+    // 1. Find recurring task titles - same title done 2+ times
+    const titleGroups = {};
+    done.forEach(t=>{
+      const norm = t.title.toLowerCase().trim().replace(/\b(20\d{2}|q[1-4]|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|monday|tuesday|wednesday|thursday|friday|january|february|march|april|june|july|august|september|october|november|december)\b/gi,"").replace(/\s+/g," ").trim();
+      if(!titleGroups[norm]) titleGroups[norm] = [];
+      titleGroups[norm].push(t);
+    });
+    
+    Object.entries(titleGroups).forEach(([norm,occurrences])=>{
+      if(occurrences.length<2 || norm.length<5) return;
+      // Sort by date, find avg gap
+      const sorted = occurrences.sort((a,b)=>new Date(a.doneAt)-new Date(b.doneAt));
+      const lastDone = new Date(sorted[sorted.length-1].doneAt);
+      const daysSince = Math.floor((today-lastDone)/86400000);
+      
+      // Calculate typical gap between occurrences
+      const gaps = [];
+      for(let i=1;i<sorted.length;i++){
+        gaps.push((new Date(sorted[i].doneAt)-new Date(sorted[i-1].doneAt))/86400000);
+      }
+      const avgGap = gaps.reduce((a,b)=>a+b,0)/gaps.length;
+      
+      // If we're approaching or past the typical recurrence
+      if(daysSince >= avgGap*0.8 && daysSince <= avgGap*1.5) {
+        const template = sorted[sorted.length-1];
+        suggestions.push({
+          title: template.title,
+          brand: template.brand,
+          tab: template.tab,
+          priority: template.priority||"medium",
+          reason: `Usually done every ${Math.round(avgGap)} days · last ${daysSince}d ago`,
+          urgency: daysSince > avgGap*1.2 ? "high" : "normal",
+          source: "recurring"
+        });
+      }
+    });
+    
+    // 2. Day-of-week pattern
+    const dowName = today.toLocaleDateString("en-US",{weekday:"long"});
+    const dowTasks = done.filter(t=>{
+      const td = new Date(t.doneAt);
+      return td.toLocaleDateString("en-US",{weekday:"long"})===dowName;
+    });
+    
+    if(dowTasks.length>=3) {
+      // Group by title and find most-frequent ones done on this day
+      const dowFreq = {};
+      dowTasks.forEach(t=>{
+        const k=t.title.toLowerCase().trim();
+        if(!dowFreq[k]) dowFreq[k]={count:0,task:t};
+        dowFreq[k].count++;
+      });
+      const topDow = Object.values(dowFreq).filter(x=>x.count>=2).sort((a,b)=>b.count-a.count).slice(0,2);
+      topDow.forEach(({task,count})=>{
+        // Don't double-suggest if already in recurring list
+        if(!suggestions.some(s=>s.title.toLowerCase()===task.title.toLowerCase())) {
+          suggestions.push({
+            title: task.title,
+            brand: task.brand,
+            tab: task.tab,
+            priority: task.priority||"medium",
+            reason: `You typically do this on ${dowName}s (${count}× before)`,
+            urgency: "normal",
+            source: "dow"
+          });
+        }
+      });
+    }
+    
+    // 3. Month-of-month pattern (e.g. month-end reporting)
+    const dom = today.getDate();
+    const dayOfMonthTasks = done.filter(t=>{
+      const td = new Date(t.doneAt);
+      return Math.abs(td.getDate()-dom)<=2;
+    });
+    
+    if(dayOfMonthTasks.length>=3) {
+      const domFreq = {};
+      dayOfMonthTasks.forEach(t=>{
+        const k=t.title.toLowerCase().trim();
+        if(!domFreq[k]) domFreq[k]={count:0,task:t};
+        domFreq[k].count++;
+      });
+      const topDom = Object.values(domFreq).filter(x=>x.count>=2).sort((a,b)=>b.count-a.count).slice(0,2);
+      topDom.forEach(({task,count})=>{
+        if(!suggestions.some(s=>s.title.toLowerCase()===task.title.toLowerCase())) {
+          const phrase = dom<=5 ? "early month" : dom>=25 ? "month-end" : "mid-month";
+          suggestions.push({
+            title: task.title,
+            brand: task.brand,
+            tab: task.tab,
+            priority: task.priority||"medium",
+            reason: `${phrase} pattern (${count}× before)`,
+            urgency: "normal",
+            source: "dom"
+          });
+        }
+      });
+    }
+    
+    return suggestions.slice(0,6);
+  }, [data]);
+  
+  // AI-powered generation — calls Claude API with full context
+  const generateAISuggestions = useCallback(async (brandFilter="all") => {
+    setAiSuggestionsLoading(true);
+    try {
+      const allTasks = Object.entries(data.tasks).flatMap(([key,tasks])=>{
+        const [bid,...rest]=key.split("_");
+        return tasks.map(t=>({...t,brand:bid,tab:rest.join("_")}));
+      });
+      const scoped = brandFilter==="all" ? allTasks : allTasks.filter(t=>t.brand===brandFilter);
+      const recentDone = scoped.filter(t=>t.done&&t.doneAt&&(Date.now()-new Date(t.doneAt))<90*86400000)
+        .sort((a,b)=>(b.doneAt||"").localeCompare(a.doneAt||""))
+        .slice(0,20);
+      const recentPending = scoped.filter(t=>!t.done).slice(0,10);
+      
+      const today = new Date();
+      const dowName = today.toLocaleDateString("en-AU",{weekday:"long"});
+      const dom = today.getDate();
+      const monthName = today.toLocaleDateString("en-AU",{month:"long"});
+      
+      const prompt = `You are PRODASH AI — a productivity engine that learns from a wagering industry compliance professional managing 5 wagering brands (Goldbet, Ultrabet, BoostBet, AllBets, BetGold) + TechDev (internal/tech) + Miscellaneous (catch-all).
+
+CURRENT MOMENT:
+- ${dowName}, ${dom} ${monthName} 2026
+- ${dom<=5?"Early month":dom>=25?"Month-end approaching":"Mid-month"}
+${brandFilter!=="all"?`- User is focused on ${brandFilter} brand only`:""}
+
+THEIR RECENT COMPLETED WORK (last 90 days, most recent first):
+${recentDone.map(t=>`- "${t.title}" [${t.brand}/${t.tab}] done ${t.doneAt?.split("T")[0]}`).join("\n")||"No history yet."}
+
+CURRENT OPEN TASKS:
+${recentPending.map(t=>`- "${t.title}" [${t.brand}/${t.tab}] ${t.due?"due "+t.due:"no due"}`).join("\n")||"None."}
+
+YOUR JOB: Generate 4 INTELLIGENT task suggestions for them to consider RIGHT NOW. Base it on:
+1. Patterns in their history (recurring work, day-of-week habits, month cycles)
+2. The current date context (e.g. month-end = financial reporting, Mondays = planning)
+3. Gaps you can spot (e.g. "haven't done X for brand Y this month")
+4. Industry knowledge of wagering compliance work (GRV returns, RGNSW reports, MGA filings, AML reviews, KYC audits, monthly turnover figures, product fee agreements)
+5. NEVER suggest TechDev brand for "all" context — TechDev is internal only
+
+For each suggestion include a SHORT reason (max 10 words) explaining why NOW.
+
+Return ONLY valid JSON array (no markdown, no preamble):
+[
+  {"title": "specific actionable task title", "brand": "goldbet|ultrabet|boostbet|allbets|betgold|misc", "tab": "Reporting|Compliance|Accounting|Miscellaneous", "priority": "low|medium|high|urgent", "reason": "why this matters now"},
+  ...4 items
+]`;
+      
+      const res = await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:900,messages:[{role:"user",content:prompt}]})
+      });
+      const json = await res.json();
+      const text = json.content?.filter(c=>c.type==="text").map(c=>c.text).join("")||"";
+      const match = text.match(/\[[\s\S]*\]/);
+      if(match) {
+        const parsed = JSON.parse(match[0]);
+        if(Array.isArray(parsed)) {
+          const suggestions = parsed.slice(0,6).map(s=>({...s,source:"ai"}));
+          setAiSuggestions(suggestions);
+          localStorage.setItem("prodash_ai_suggestions",JSON.stringify({
+            date: new Date().toISOString().split("T")[0],
+            suggestions
+          }));
+        }
+      }
+    } catch(e) {
+      console.error("AI suggestion error:",e);
+      showToast("Couldn't reach AI — using local patterns only","warning");
+    }
+    setAiSuggestionsLoading(false);
+  }, [data, API_KEY, showToast]);
+
   // ── COMPUTED ──
   const stats=getStats(); const bStats=getBrandStats(); const score=getScore();
   const currentBrand=BRANDS.find(b=>b.id===activeBrand);
@@ -2914,24 +3117,100 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
                   </div>
                 )}
 
-                {/* No data at all - show the original suggestions */}
-                {allDoneRecent.length===0 && futureUpcoming.length===0 && (
-                  <div className="dash-empty-block">
-                    <div className="dash-empty-block-head">Start with something small</div>
-                    <div className="dash-empty-examples">
-                      <button className="dash-empty-example" onClick={()=>{
-                        addTask({title:"Review weekly compliance reports",due:todayStr(),priority:"high",brand:"goldbet",tab:"Compliance"});
-                      }}>Review weekly compliance reports →</button>
-                      <button className="dash-empty-example" onClick={()=>{
-                        const f=new Date(); f.setDate(f.getDate()+(5-f.getDay()+7)%7); 
-                        addTask({title:"Submit monthly turnover figures",due:f.toISOString().split("T")[0],priority:"medium",brand:"goldbet",tab:"Reporting"});
-                      }}>Submit monthly turnover figures →</button>
-                      <button className="dash-empty-example" onClick={()=>setView("pa")}>
-                        Or just talk to your PA →
-                      </button>
+                {/* AI Suggestions — learns from your data */}
+                {(()=>{
+                  const localPatterns = detectLocalPatterns(dashBrandFilter);
+                  const aiList = aiSuggestions||[];
+                  // Filter AI suggestions by brand if a brand is selected  
+                  const scopedAI = dashBrandFilter==="all" ? aiList : aiList.filter(s=>s.brand===dashBrandFilter);
+                  const allSuggestions = [...localPatterns, ...scopedAI.filter(a=>!localPatterns.some(l=>l.title.toLowerCase()===a.title?.toLowerCase()))].slice(0,6);
+                  const hasAnyHistory = Object.values(data.tasks).flat().filter(t=>t.done).length > 0;
+                  
+                  return (
+                    <div className="dash-empty-block dash-ai-block">
+                      <div className="dash-ai-block-head">
+                        <div>
+                          <div className="dash-ai-title">
+                            <span className="dash-ai-spark">✦</span>
+                            {hasAnyHistory ? "Smart suggestions" : "Get started"}
+                          </div>
+                          <div className="dash-ai-sub">
+                            {hasAnyHistory 
+                              ? `Based on ${dashBrandFilter==="all"?"your":BRANDS.find(b=>b.id===dashBrandFilter)?.name+"'s"} patterns`
+                              : "I'll learn from every task you add"}
+                          </div>
+                        </div>
+                        <button 
+                          className="dash-ai-refresh" 
+                          onClick={()=>generateAISuggestions(dashBrandFilter)}
+                          disabled={aiSuggestionsLoading}>
+                          {aiSuggestionsLoading?"Thinking…":hasAnyHistory?"✦ Refresh with AI":"✦ Ask AI"}
+                        </button>
+                      </div>
+                      
+                      {allSuggestions.length>0 ? (
+                        <div className="dash-ai-list">
+                          {allSuggestions.map((s,i)=>{
+                            const b=BRANDS.find(x=>x.id===s.brand);
+                            const tagLabel = s.source==="recurring" ? "Recurring" : s.source==="dow" ? "Weekly habit" : s.source==="dom" ? "Monthly cycle" : "AI";
+                            const tagClass = s.source==="ai" ? "tag-ai" : "tag-pattern";
+                            return (
+                              <div key={i} className={`dash-ai-item${s.urgency==="high"?" is-urgent":""}`}>
+                                <div className="dash-ai-item-main" onClick={()=>{
+                                  addTask({
+                                    title: s.title,
+                                    brand: s.brand,
+                                    tab: s.tab||"Miscellaneous",
+                                    priority: s.priority||"medium"
+                                  });
+                                  setAiSuggestions(prev=>prev.filter((_,idx)=>idx!==i));
+                                }}>
+                                  <div className="dash-ai-item-title">{s.title}</div>
+                                  <div className="dash-ai-item-meta">
+                                    {b && <span className="task-brand-chip" style={{background:b.color+"15",color:b.color}}>{b.name}</span>}
+                                    <span className="task-tab-chip">{s.tab}</span>
+                                    {s.priority==="urgent"&&<span className="dash-ai-pri-urgent">Urgent</span>}
+                                    {s.priority==="high"&&<span className="dash-ai-pri-high">High</span>}
+                                    <span className={`dash-ai-tag ${tagClass}`}>{tagLabel}</span>
+                                  </div>
+                                  <div className="dash-ai-reason">{s.reason}</div>
+                                </div>
+                                <button className="dash-ai-add" onClick={(e)=>{
+                                  e.stopPropagation();
+                                  addTask({
+                                    title: s.title,
+                                    brand: s.brand,
+                                    tab: s.tab||"Miscellaneous",
+                                    priority: s.priority||"medium"
+                                  });
+                                  setAiSuggestions(prev=>prev.filter((_,idx)=>idx!==i));
+                                }}>+</button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : aiSuggestionsLoading ? (
+                        <div className="dash-ai-loading">
+                          <span className="dash-ai-loading-dots"><span/><span/><span/></span>
+                          Analysing your patterns…
+                        </div>
+                      ) : !hasAnyHistory ? (
+                        <div className="dash-ai-zerodata">
+                          <p>I haven't seen you work yet. Add a few tasks — anything — and I'll start spotting patterns: what brand you work on most, what day you do compliance, when your reporting cycle hits. Within a week, I'll be suggesting work before you have to think about it.</p>
+                          <div className="dash-ai-quick-add">
+                            <button onClick={()=>addTask({title:"Weekly compliance check",brand:"goldbet",tab:"Compliance",priority:"medium",due:todayStr()})}>+ Compliance check</button>
+                            <button onClick={()=>addTask({title:"Submit monthly GRV report",brand:"goldbet",tab:"Reporting",priority:"medium"})}>+ GRV report</button>
+                            <button onClick={()=>setView("pa")}>Talk to PA →</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="dash-ai-empty">
+                          Not enough recurring patterns yet. Tap <strong>✦ Refresh with AI</strong> to generate smart suggestions from your history.
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             );
           }
