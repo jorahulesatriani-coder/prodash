@@ -4003,6 +4003,23 @@ SMART ALLOCATION RULES:
 - "compliance", "licence", "regulatory", "AML", "KYC", "audit" → tab: Compliance
 - "invoice", "payment", "salary", "payslip", "payroll", "accounting", "P&L" → tab: Accounting
 - If unclear → tab: Miscellaneous
+
+**TAB SHORTCUT LETTERS — recognise these:**
+The user often uses single letters as shortcuts for categories. When you see a standalone uppercase letter R, C, A, or M (often after a brand name or task description), interpret it as the tab:
+- "R" or " R " or "/R" → tab: Reporting
+- "C" or " C " or "/C" → tab: Compliance
+- "A" or " A " or "/A" → tab: Accounting
+- "M" or " M " or "/M" → tab: Miscellaneous
+
+Examples:
+- "GRNT lodgement for all brands R" → 5 tasks, each tab: Reporting
+- "Quarterly audit Goldbet C urgent" → 1 task: Goldbet, Compliance, urgent
+- "Pay invoices for ultrabet A" → 1 task: Ultrabet, Accounting
+- "Buy office supplies M" → 1 task: misc, Miscellaneous
+- "Submit MGA returns for goldbet ultrabet R" → 2 tasks, both Reporting
+
+CRITICAL: only treat as a tab shortcut if it's a standalone letter clearly separated by spaces or punctuation. Don't treat the "A" in "AML" or the "C" in "Q4" as a shortcut — only standalone single letters.
+
 - Match brand by name: Goldbet=goldbet, Ultrabet=ultrabet, BoostBet=boostbet, AllBets=allbets, BetGold=betgold, TechDev=techdev, Misc/Personal/Other=misc
 - If brand unknown → brand: "misc", tab: "Miscellaneous"
 - **"ALL BRANDS" RULE — IMPORTANT:** When the user says "all brands", "every brand", "across all brands", "each brand", etc., this means the FIVE wagering brands ONLY: Goldbet, Ultrabet, BoostBet, AllBets, BetGold. **DO NOT include TechDev or Miscellaneous** when creating "all brands" tasks. TechDev is an internal/tech operation handled separately. So "do payslips for all brands" creates 5 tasks (one per wagering brand), NOT 7.
