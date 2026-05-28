@@ -39,6 +39,11 @@ const BRANDS = [
   {id:"misc",    name:"Miscellaneous", color:"#6B7280",bg:"#F9FAFB",emoji:""},
 ];
 const BRAND_TABS  = ["Reporting","Compliance","Accounting","Miscellaneous"];
+
+// "All brands" in natural-language commands means the 5 wagering brands
+// (excludes TechDev which is internal/tech, and Misc which is a catch-all)
+const CORE_BRAND_IDS = ["goldbet","ultrabet","boostbet","allbets","betgold"];
+const CORE_BRANDS = () => BRANDS.filter(b => CORE_BRAND_IDS.includes(b.id));
 const PRIORITIES  = [{key:"low",label:"Low"},{key:"medium",label:"Medium"},{key:"high",label:"High"},{key:"urgent",label:"Urgent"}];
 const CATEGORIES  = ["Reporting","Compliance","Accounting","Payroll"];
 const RECURRENCE  = [{key:"",label:"None"},{key:"daily",label:"Daily"},{key:"weekly",label:"Weekly"},{key:"monthly",label:"Monthly"}];
@@ -1438,6 +1443,9 @@ export default function App() {
   const [showTopbarMore,setShowTopbarMore] = useState(false);
   const [quickAddTitle,setQuickAddTitle] = useState("");
   const [quickAddDue,setQuickAddDue]     = useState("");
+  const [quickAddBrand,setQuickAddBrand] = useState("");
+  const [quickAddTab,setQuickAddTab]     = useState("Miscellaneous");
+  const [quickAddPriority,setQuickAddPriority] = useState("medium");
   const [dashBrandFilter,setDashBrandFilter] = useState("all");
   const [focusSecs,setFocusSecs]   = useState(POMODORO_MINS*60);
   const [focusRunning,setFocusRunning] = useState(false);
@@ -1895,7 +1903,8 @@ export default function App() {
     const overdue = allTasks.filter(t=>!t.done&&t.due&&t.due<todayStr());
     const pending = allTasks.filter(t=>!t.done);
     const doneToday = allTasks.filter(t=>t.done&&t.doneAt?.startsWith(todayStr()));
-    const brandData = BRANDS.map(b=>{
+    // Focus brand insights on the 5 core wagering brands (not TechDev/Misc)
+    const brandData = CORE_BRANDS().map(b=>{
       const bt = Object.entries(data.tasks).filter(([k])=>k.startsWith(b.id)).flatMap(([,v])=>v);
       return `${b.name}: ${bt.filter(t=>!t.done).length} pending, ${bt.filter(t=>!t.done&&t.due&&t.due<todayStr()).length} overdue, ${bt.filter(t=>t.done).length} done`;
     }).join(" | ");
@@ -1903,10 +1912,12 @@ export default function App() {
 
     const prompt = `You are the PRODASH AI engine. Analyse this real-time data and return smart insights.
 
+CONTEXT: User manages 5 wagering brands (Goldbet, Ultrabet, BoostBet, AllBets, BetGold). TechDev is internal/tech work, Misc is a catch-all. When commenting on "the brands" or "all brands", focus on the 5 wagering brands only.
+
 DATA:
 - Score: ${currentScore}/100
 - Total pending: ${pending.length}, Overdue: ${overdue.length}, Done today: ${doneToday.length}
-- Brands: ${brandData}
+- Wagering brands: ${brandData}
 - Goals active: ${(data.goals||[]).filter(g=>!g.achieved).length}
 - Notes: ${(data.notes||[]).length}
 - Today: ${todayStr()} (${new Date().toLocaleDateString('en-AU',{weekday:'long'})})
@@ -2632,26 +2643,69 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
           )}
         </div>
 
-        {/* QUICK ADD */}
-        <div className="dash-quickadd">
+        {/* QUICK ADD — smart, with brand/tab/priority */}
+        <div className="qa-card">
           <input
-            className="dash-quickadd-input"
-            placeholder="Add a task..."
+            className="qa-input"
+            placeholder="What needs doing? (Press Enter to add)"
             value={quickAddTitle}
             onChange={e=>setQuickAddTitle(e.target.value)}
             onKeyDown={e=>{
               if(e.key==="Enter"&&quickAddTitle.trim()){
-                addTask({title:quickAddTitle.trim(),due:quickAddDue,priority:"medium",brand:dashBrandFilter==="all"?"misc":dashBrandFilter,tab:"Miscellaneous"});
+                addTask({
+                  title:quickAddTitle.trim(),
+                  due:quickAddDue,
+                  priority:quickAddPriority||"medium",
+                  brand:quickAddBrand||(dashBrandFilter==="all"?"misc":dashBrandFilter),
+                  tab:quickAddTab||"Miscellaneous"
+                });
                 setQuickAddTitle(""); setQuickAddDue("");
               }
             }}
           />
-          <input
-            type="date"
-            className="dash-quickadd-date"
-            value={quickAddDue}
-            onChange={e=>setQuickAddDue(e.target.value)}
-          />
+          <div className="qa-meta-row">
+            <div className="qa-field">
+              <label>Brand</label>
+              <select className="qa-select" value={quickAddBrand||(dashBrandFilter==="all"?"misc":dashBrandFilter)} onChange={e=>setQuickAddBrand(e.target.value)}>
+                {BRANDS.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+            <div className="qa-field">
+              <label>Category</label>
+              <select className="qa-select" value={quickAddTab||"Miscellaneous"} onChange={e=>setQuickAddTab(e.target.value)}>
+                {BRAND_TABS.map(t=><option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="qa-field">
+              <label>Priority</label>
+              <select className="qa-select" value={quickAddPriority||"medium"} onChange={e=>setQuickAddPriority(e.target.value)}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+            <div className="qa-field">
+              <label>Due</label>
+              <input type="date" className="qa-select" value={quickAddDue} onChange={e=>setQuickAddDue(e.target.value)} />
+            </div>
+            <button className="qa-add-btn"
+              disabled={!quickAddTitle.trim()}
+              onClick={()=>{
+                if(quickAddTitle.trim()){
+                  addTask({
+                    title:quickAddTitle.trim(),
+                    due:quickAddDue,
+                    priority:quickAddPriority||"medium",
+                    brand:quickAddBrand||(dashBrandFilter==="all"?"misc":dashBrandFilter),
+                    tab:quickAddTab||"Miscellaneous"
+                  });
+                  setQuickAddTitle(""); setQuickAddDue("");
+                }
+              }}>
+              Add task
+            </button>
+          </div>
         </div>
 
         {/* BRAND FILTER */}
@@ -2709,7 +2763,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
                         {brand.name}
                       </span>
                     )}
-                    {t.tab && t.tab!=="Miscellaneous" && (
+                    {t.tab && (
                       <span className="task-tab-chip">{t.tab}</span>
                     )}
                     {due && (
@@ -2729,7 +2783,20 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
             return (
               <div className="dash-list">
                 <div className="dash-empty">
-                  {dashBrandFilter==="all" ? "Nothing pending. Type something above." : `Nothing pending for ${BRANDS.find(b=>b.id===dashBrandFilter)?.name||"this brand"}.`}
+                  <div className="dash-empty-headline">{dashBrandFilter==="all" ? "Nothing pending." : `No pending tasks for ${BRANDS.find(b=>b.id===dashBrandFilter)?.name||"this brand"}.`}</div>
+                  <div className="dash-empty-sub">Start with something small. Try:</div>
+                  <div className="dash-empty-examples">
+                    <button className="dash-empty-example" onClick={()=>{
+                      addTask({title:"Review weekly compliance reports",due:todayStr(),priority:"high",brand:"goldbet",tab:"Compliance"});
+                    }}>Review weekly compliance reports →</button>
+                    <button className="dash-empty-example" onClick={()=>{
+                      const f=new Date(); f.setDate(f.getDate()+(5-f.getDay()+7)%7); 
+                      addTask({title:"Submit monthly turnover figures",due:f.toISOString().split("T")[0],priority:"medium",brand:"goldbet",tab:"Reporting"});
+                    }}>Submit monthly turnover figures →</button>
+                    <button className="dash-empty-example" onClick={()=>setView("pa")}>
+                      Or just talk to your PA →
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -2789,7 +2856,7 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
             {/* Brand silence alerts */}
             {(()=>{
               const sevenDaysAgo=new Date(Date.now()-7*86400000).toISOString().split("T")[0];
-              const silent=BRANDS.filter(b=>{
+              const silent=CORE_BRANDS().filter(b=>{
                 const bTasks=Object.entries(data.tasks).filter(([k])=>k.startsWith(b.id)).flatMap(([,v])=>v);
                 if(bTasks.length===0) return false;
                 return !bTasks.some(t=>(t.createdAt||"")>=sevenDaysAgo||(t.doneAt||"")>=sevenDaysAgo);
@@ -3525,6 +3592,7 @@ SMART ALLOCATION RULES:
 - If unclear → tab: Miscellaneous
 - Match brand by name: Goldbet=goldbet, Ultrabet=ultrabet, BoostBet=boostbet, AllBets=allbets, BetGold=betgold, TechDev=techdev, Misc/Personal/Other=misc
 - If brand unknown → brand: "misc", tab: "Miscellaneous"
+- **"ALL BRANDS" RULE — IMPORTANT:** When the user says "all brands", "every brand", "across all brands", "each brand", etc., this means the FIVE wagering brands ONLY: Goldbet, Ultrabet, BoostBet, AllBets, BetGold. **DO NOT include TechDev or Miscellaneous** when creating "all brands" tasks. TechDev is an internal/tech operation handled separately. So "do payslips for all brands" creates 5 tasks (one per wagering brand), NOT 7.
 - Set priority based on urgency words: "urgent/asap/now" → urgent, "important" → high, default → medium
 - ALWAYS be helpful — answer questions AND create tasks`;
 
@@ -4019,13 +4087,12 @@ SMART ALLOCATION RULES:
           </div>
         </div>
 
-        {/* Quick add bar */}
-        {(view==="dashboard"||view==="brand"||view==="goals"||view==="weekplan")&&(
+        {/* Quick add bar - shown only on brand view (dashboard has its own) */}
+        {view==="brand"&&(
           <div className="quick-add-bar" style={{background:"var(--ai-bg)",borderBottom:"1px solid var(--ai-border)",padding:"8px 26px",display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
-            <span style={{fontFamily:"Martian Mono,monospace",fontSize:7.5,color:"var(--indigo)",letterSpacing:2,textTransform:"uppercase",whiteSpace:"nowrap"}}>QUICK ADD</span>
             <input className="inp" style={{flex:1,maxWidth:420,padding:"6px 12px",fontSize:12.5,background:"rgba(255,255,255,.7)",border:"1px solid var(--ai-border)"}}
               placeholder={`New task${currentBrand?" for "+currentBrand.name:""}... press Enter to add`}
-              onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){addTask({title:e.target.value.trim(),priority:"medium",brand:activeBrand||"goldbet",tab:brandTab});e.target.value="";}}}/>
+              onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){addTask({title:e.target.value.trim(),priority:"medium",brand:activeBrand||"misc",tab:brandTab});e.target.value="";}}}/>
             <button className="btn btn-primary btn-sm" onClick={()=>setShowTaskModal(true)}>+ Full Details</button>
             <button className="btn btn-ai btn-sm" onClick={()=>setShowPinModal(true)}>📌 Note</button>
             <button className="btn btn-ai btn-sm" onClick={()=>setShowReminderModal(true)}>🔔 Remind</button>
