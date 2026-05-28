@@ -1257,3 +1257,600 @@ html, body, #root { background: #FAFAF7; }
   border-radius: 99px;
   white-space: nowrap;
 }
+
+/* ══════════════════════════════════════════
+   v7 — FINAL POLISH PASS
+   "One product, calm and readable"
+   ══════════════════════════════════════════ */
+
+/* ── Typography uplift: slightly larger, more readable ── */
+body {
+  font-size: 14.5px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.inp, input, textarea, select, button {
+  font-size: 14px;
+}
+.btn-xs { font-size: 11px; padding: 5px 10px; }
+.btn-sm { font-size: 12.5px; padding: 7px 14px; }
+
+/* Dashboard typography refresh */
+.dash-headline { font-size: 28px; }
+.dash-label { font-size: 22px; }
+.dash-date { font-size: 13.5px; }
+.task-row-title { font-size: 14.5px; }
+.task-row-meta { gap: 9px; }
+.task-brand-chip { font-size: 11.5px; padding: 3px 9px; }
+.task-tab-chip { font-size: 11px; padding: 2.5px 8px; }
+.task-due-text { font-size: 11.5px; }
+.dash-section-head { font-size: 12px; padding-bottom: 9px; }
+.dash-section-count { font-size: 11.5px; }
+
+/* Sidebar typography */
+.nav-item { font-size: 13.5px; padding: 8px 11px; }
+.nav-section-label { font-size: 10px; padding: 10px 11px 6px; letter-spacing: 0.7px; }
+
+/* ══════════════════════════════════════════
+   WAR ROOM — calm, light, useful
+   ══════════════════════════════════════════ */
+.wr-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+}
+.wr-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+}
+.wr-eyebrow {
+  font-size: 11px;
+  color: #9CA3AF;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+.wr-title {
+  font-size: 30px;
+  font-weight: 600;
+  color: #111827;
+  letter-spacing: -0.7px;
+  margin: 0 0 6px 0;
+  line-height: 1.1;
+}
+.wr-date { font-size: 14px; color: #6B7280; }
+.wr-critical {
+  text-align: right;
+  padding: 12px 20px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #E5E7EB;
+}
+.wr-critical-num {
+  font-size: 38px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+.wr-critical-label {
+  font-size: 11px;
+  color: #6B7280;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.wr-brand-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.wr-brand-card {
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.wr-brand-card:hover {
+  border-color: #9CA3AF;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+.wr-brand-card-alert {
+  border-color: #FCA5A5;
+  background: #FEF2F2;
+}
+.wr-brand-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.wr-brand-dot { width: 8px; height: 8px; border-radius: 99px; }
+.wr-brand-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  flex: 1;
+}
+.wr-brand-grade {
+  font-size: 18px;
+  font-weight: 600;
+  font-family: 'Martian Mono', monospace;
+}
+.wr-brand-bar {
+  height: 4px;
+  background: #F3F4F6;
+  border-radius: 99px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.wr-brand-bar > div {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.4s;
+}
+.wr-brand-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: #6B7280;
+}
+.wr-brand-overdue { color: #B91C1C; font-weight: 600; }
+
+.wr-ai-brief {
+  background: #fff;
+  border: 1px solid #E0E7FF;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 28px;
+}
+.wr-ai-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.wr-ai-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #4F46E5;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+.wr-ai-btn {
+  font-size: 12px;
+  padding: 6px 14px;
+  background: #4F46E5;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 500;
+  font-family: inherit;
+  transition: background 0.1s;
+}
+.wr-ai-btn:hover:not(:disabled) { background: #4338CA; }
+.wr-ai-btn:disabled { background: #9CA3AF; cursor: not-allowed; }
+.wr-ai-loading {
+  color: #6B7280;
+  font-size: 13px;
+  padding: 8px 0;
+}
+.wr-ai-text {
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.65;
+  padding-top: 4px;
+}
+.wr-ai-empty {
+  font-size: 13px;
+  color: #9CA3AF;
+}
+
+.wr-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 18px;
+}
+.wr-column-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.wr-column-count {
+  font-size: 11.5px;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-weight: 600;
+}
+.wr-column-empty {
+  font-size: 13px;
+  color: #9CA3AF;
+  padding: 12px 0;
+}
+.wr-column-more {
+  font-size: 11.5px;
+  color: #9CA3AF;
+  padding: 8px 0;
+  text-align: center;
+}
+
+.wr-task-card {
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  padding: 11px 13px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.wr-task-card:hover {
+  border-color: #6B7280;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
+.wr-task-title {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #111827;
+  line-height: 1.4;
+  margin-bottom: 7px;
+}
+.wr-task-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.wr-due-badge {
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-weight: 600;
+}
+
+/* ══════════════════════════════════════════
+   PAGE CONTENT — calm background everywhere
+   ══════════════════════════════════════════ */
+.page-content {
+  background: #FAFAF7;
+  padding: 28px 32px;
+}
+
+/* Hide quick-add bar styling on brand view too - cleaner */
+.quick-add-bar {
+  background: #FAFAF7 !important;
+  border-bottom: 1px solid #ECEEF5 !important;
+  padding: 10px 26px !important;
+}
+
+/* ══════════════════════════════════════════
+   GENERIC CARDS — consistent everywhere
+   ══════════════════════════════════════════ */
+.card {
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+}
+
+.empty-state {
+  padding: 48px 24px;
+  text-align: center;
+  background: transparent;
+}
+.empty-icon { font-size: 32px; opacity: 0.3; margin-bottom: 12px; }
+.empty-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+.empty-desc {
+  font-size: 13.5px;
+  color: #9CA3AF;
+}
+
+/* ══════════════════════════════════════════
+   PILL TABS — used on brand views, etc.
+   ══════════════════════════════════════════ */
+.pill-tabs {
+  display: flex;
+  gap: 4px;
+  background: #F3F4F6;
+  padding: 3px;
+  border-radius: 99px;
+}
+.pill-tab {
+  padding: 5px 14px;
+  border-radius: 99px;
+  font-size: 12.5px;
+  color: #6B7280;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-weight: 500;
+}
+.pill-tab.active {
+  background: #fff;
+  color: #111;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+
+/* Tab bar (brand subtabs) — modernised */
+.tab-bar {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid #E5E7EB;
+  padding-bottom: 0;
+}
+.tab-btn {
+  background: transparent;
+  border: none;
+  padding: 9px 16px;
+  font-size: 13px;
+  color: #6B7280;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  font-weight: 500;
+  font-family: inherit;
+  margin-bottom: -1px;
+}
+.tab-btn:hover { color: #111; }
+.tab-btn.active {
+  color: #111;
+  border-bottom-color: #4F46E5;
+}
+
+/* ══════════════════════════════════════════
+   FONT SCALE NORMALISATION — kill micro-text in inline styles
+   ══════════════════════════════════════════ */
+/* Catch the tiny 8-10px text scattered through inline styles.
+   Uses precise selectors to avoid matching e.g. 80px, 18px, 11.5px */
+[style*="fontSize:8,"], [style*="fontSize:8 "], [style*="fontSize:8}"], [style*="fontSize: 8"],
+[style*="fontSize:8.5"],
+[style*="fontSize:9,"], [style*="fontSize:9 "], [style*="fontSize:9}"], [style*="fontSize: 9"],
+[style*="fontSize:9.5"] {
+  font-size: 11px !important;
+}
+
+/* ══════════════════════════════════════════
+   MOBILE — better defaults for phones
+   ══════════════════════════════════════════ */
+@media (max-width: 640px) {
+  body { font-size: 15px; }
+  .dash-headline { font-size: 24px; }
+  .dash-label { font-size: 18px; }
+  .wr-page { padding: 20px 14px 100px; }
+  .wr-title { font-size: 24px; }
+  .wr-brand-grid { grid-template-columns: repeat(2, 1fr); }
+  .wr-columns { grid-template-columns: 1fr; gap: 22px; }
+  .wr-critical { padding: 10px 14px; }
+  .wr-critical-num { font-size: 28px; }
+  .page-content { padding: 16px 14px; }
+}
+
+/* Reduce visual noise: subtle scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+
+/* Make modals feel cleaner */
+.modal-box {
+  border-radius: 14px !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.18) !important;
+  padding: 22px 24px !important;
+}
+.modal-title {
+  font-size: 16px !important;
+  margin-bottom: 18px !important;
+}
+
+/* ══════════════════════════════════════════
+   AI BRIEFING / INSIGHT — calmer styling
+   ══════════════════════════════════════════ */
+.ai-panel {
+  background: #fff !important;
+  border: 1px solid #E0E7FF !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+
+/* Brand-view AI button - simpler */
+.ai-btn {
+  background: #fff;
+  border: 1px solid #C7D2FE;
+  color: #4F46E5;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 500;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.ai-btn:hover { background: #F5F3FF; }
+
+/* Section section labels everywhere should be calmer */
+.label-xs, .label-sm {
+  font-family: inherit !important;
+  font-weight: 500 !important;
+  font-size: 11px !important;
+  letter-spacing: 0.5px !important;
+  color: #6B7280 !important;
+}
+
+/* Pin board cards — softer */
+.pin-card {
+  border-radius: 12px !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+}
+
+/* More toggle in sidebar */
+.nav-more-toggle {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+  transition: color 0.1s;
+}
+.nav-more-toggle:hover { color: #4F46E5; }
+.nav-more-arrow {
+  font-size: 9px;
+  color: #9CA3AF;
+  margin-right: 2px;
+}
+
+/* ══════════════════════════════════════════
+   BRAND VIEW POLISH (without rewriting)
+   ══════════════════════════════════════════ */
+
+/* Health grade card at top of brand */
+.brand-stat-card, .brand-summary-card {
+  background: #fff !important;
+  border: 1px solid #E5E7EB !important;
+  border-radius: 14px !important;
+  padding: 18px 22px !important;
+  box-shadow: none !important;
+}
+
+/* Search input + filter pills */
+.inp-wrap { background: #fff; border-radius: 8px; }
+.inp.has-icon { font-size: 13px; }
+
+/* Bulk action bar — cleaner */
+.bulk-action-bar {
+  background: #F5F3FF !important;
+  border: 1px solid #C7D2FE !important;
+  border-radius: 10px !important;
+}
+
+/* Calendar view light fixes */
+.cal-day {
+  background: #fff !important;
+  border: 1px solid #E5E7EB !important;
+}
+.cal-day.is-today {
+  border-color: #4F46E5 !important;
+  background: #F5F3FF !important;
+}
+
+/* Badges — calmer colors */
+.badge {
+  font-size: 10.5px !important;
+  padding: 2px 8px !important;
+  border-radius: 99px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.2px !important;
+  text-transform: capitalize !important;
+}
+.badge-red { background: #FEE2E2; color: #B91C1C; }
+.badge-amber { background: #FEF3C7; color: #92400E; }
+.badge-violet { background: #EDE9FE; color: #6D28D9; }
+.badge-blue { background: #DBEAFE; color: #1E40AF; }
+.badge-green { background: #D1FAE5; color: #047857; }
+.badge-gray { background: #F3F4F6; color: #6B7280; }
+
+/* Topbar buttons subtler */
+.topbar-more-btn {
+  background: #F3F4F6;
+  border: none;
+  width: 32px; height: 32px;
+  border-radius: 99px;
+  font-size: 16px;
+  color: #6B7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s;
+}
+.topbar-more-btn:hover { background: #E5E7EB; color: #111; }
+
+.topbar-status {
+  width: 8px; height: 8px;
+  border-radius: 99px;
+  flex-shrink: 0;
+}
+.topbar-status-ok { background: #10B981; box-shadow: 0 0 0 2px #D1FAE5; }
+.topbar-status-loading { background: #4F46E5; box-shadow: 0 0 0 2px #E0E7FF; animation: pulse-soft 1.5s ease-in-out infinite; }
+.topbar-status-error { background: #EF4444; box-shadow: 0 0 0 2px #FEE2E2; }
+@keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+.topbar-more-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  padding: 6px;
+  min-width: 200px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.topbar-more-menu button {
+  background: transparent;
+  border: none;
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 13px;
+  color: #374151;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.1s;
+}
+.topbar-more-menu button:hover { background: #F3F4F6; }
+.topbar-menu-divider {
+  height: 1px; background: #F3F4F6;
+  margin: 4px 0;
+}
+.topbar-more-wrap { position: relative; }
+
+/* Make the sidebar PRODASH logo cleaner */
+.sidebar-brand {
+  padding: 16px 14px 14px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #ECEEF5;
+}
+.brand-tag {
+  font-size: 9px;
+  background: #ECFDF5;
+  color: #047857;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+/* ══════════════════════════════════════════
+   ALL VIEW LIGHT BACKGROUND ENFORCEMENT
+   ══════════════════════════════════════════ */
+/* Catch any leftover dark backgrounds in main views */
+.page-content > div[style*="background:\"#05060F\""],
+.page-content > div[style*="background:\"#0D0F1A\""],
+.page-content > div[style*="background:#05060F"],
+.page-content > div[style*="background:#0D0F1A"] {
+  background: #FAFAF7 !important;
+  color: #111827 !important;
+}
