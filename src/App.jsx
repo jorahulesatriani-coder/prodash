@@ -1151,21 +1151,21 @@ function LiveClock() {
 function LiveClockSmall() {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
+    const t = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(t);
   }, []);
-  const time = now.toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit"});
-  const date = now.toLocaleDateString("en-GB", {weekday:"short", day:"numeric", month:"short"});
+  const date = now.toLocaleDateString("en-AU", {weekday:"short", day:"numeric", month:"short"});
+  const time = now.toLocaleTimeString("en-AU", {hour:"2-digit", minute:"2-digit"});
   return <span>{date} · {time}</span>;
 }
 
 function LiveDateLine() {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
+    const t = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(t);
   }, []);
-  return <>{now.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})} · {now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</>;
+  return <>{now.toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long"})}</>;
 }
 
 
@@ -1435,6 +1435,7 @@ export default function App() {
   const [focusMode,setFocusMode]   = useState(null); // {task, key}
   const [showScoreBreakdown,setShowScoreBreakdown] = useState(false);
   const [showMoreNav,setShowMoreNav] = useState(false);
+  const [showTopbarMore,setShowTopbarMore] = useState(false);
   const [quickAddTitle,setQuickAddTitle] = useState("");
   const [quickAddDue,setQuickAddDue]     = useState("");
   const [dashBrandFilter,setDashBrandFilter] = useState("all");
@@ -3953,18 +3954,19 @@ SMART ALLOCATION RULES:
           })}
         </div>
         <div className="sidebar-stats">
-          {false&&(streak.current||0)>0&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:"rgba(245,158,11,.1)",borderRadius:8,marginBottom:10,border:"1px solid rgba(245,158,11,.2)"}}>
-            <span style={{fontSize:16}}>🔥</span>
-            <div><div style={{fontFamily:"Martian Mono,monospace",fontSize:13,fontWeight:700,color:"#F59E0B",lineHeight:1}}>{streak.current} day streak</div>
-              <div style={{fontSize:10,color:"rgba(245,158,11,.6)",marginTop:2}}>Best: {streak.best||0} days</div>
-            </div>
-          </div>}
-          <div className="sidebar-stats-row">
-            <div><div className="ss-val">{stats.done}</div><div className="ss-lbl">Done</div></div>
-            <div style={{textAlign:"right"}}><div className="ss-val" style={{color:"var(--ink-4)"}}>{stats.pending}</div><div className="ss-lbl">Left</div></div>
-          </div>
-          <div className="sidebar-prog"><div className="sidebar-prog-fill" style={{width:`${stats.rate}%`}}/></div>
-          <div className="sidebar-rate">{stats.rate}% completion · Score {score}</div>
+          {/* Only show stats when there's actual data */}
+          {stats.total > 0 ? (
+            <>
+              <div className="sidebar-stats-row">
+                <div><div className="ss-val">{stats.done}</div><div className="ss-lbl">Done</div></div>
+                <div style={{textAlign:"right"}}><div className="ss-val" style={{color:"var(--ink-4)"}}>{stats.pending}</div><div className="ss-lbl">Left</div></div>
+              </div>
+              <div className="sidebar-prog"><div className="sidebar-prog-fill" style={{width:`${stats.rate}%`}}/></div>
+              <div className="sidebar-rate">{stats.rate}% complete</div>
+            </>
+          ) : (
+            <div className="sidebar-rate" style={{color:"var(--ink-4)"}}>No tasks yet</div>
+          )}
           {Object.values(data.tasks).flat().filter(t=>!t.done&&taskAgeDays(t.createdAt)>14).length>0&&(
             <div style={{marginTop:8,padding:"6px 10px",background:"rgba(220,38,38,.08)",borderRadius:6,border:"1px solid rgba(220,38,38,.2)"}}>
               <span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"#DC2626",fontWeight:600}}>💳 {Object.values(data.tasks).flat().filter(t=>!t.done&&taskAgeDays(t.createdAt)>14).length} TASK DEBT</span>
@@ -3980,42 +3982,40 @@ SMART ALLOCATION RULES:
       </nav>
 
       <div className="main">
-        <div className="topbar" style={brandColor?{borderBottom:`2px solid ${brandColor}30`,background:`linear-gradient(135deg, ${brandColor}08 0%, var(--white) 60%)`,boxShadow:`0 1px 0 ${brandColor}15`}:{}}>
+        <div className="topbar" style={brandColor?{borderBottom:`1px solid ${brandColor}30`}:{}}>
           <div className="row gap10">
             <button className="hamburger" onClick={()=>setSidebarOpen(p=>!p)}><span/><span/><span/></button>
-            <span className="page-title">{pageTitle}</span>
+            {view==="dashboard" ? null : <span className="page-title">{pageTitle}</span>}
             {view==="brand"&&currentBrand&&(
-              <div style={{display:"flex",gap:6}}>
+              <div style={{display:"flex",gap:6,marginLeft:view==="dashboard"?0:14}}>
                 {BRAND_TABS.map(t=><button key={t} className={`btn btn-xs${brandTab===t?" btn-dark":" btn-ghost"}`} onClick={()=>setBrandTab(t)}>{t}</button>)}
               </div>
             )}
           </div>
-          <div className="topbar-right">
-            {/* Global search */}
-            <button className="btn btn-ghost btn-xs" style={{gap:8,fontFamily:"Inter,sans-serif"}} onClick={()=>setShowGlobalSearch(true)}>
-              🔍 <span style={{color:"var(--ink-4)"}}>Search</span>
-              <kbd style={{fontFamily:"Martian Mono,monospace",fontSize:8,padding:"2px 5px",background:"var(--surface)",border:"1px solid var(--line-2)",borderRadius:3,color:"var(--ink-4)"}}>⌘K</kbd>
-            </button>
-            {/* Dark mode toggle */}
-            <button className="btn btn-ghost btn-xs btn-icon" onClick={()=>setDarkMode(p=>!p)} title="Toggle dark mode (T)">{darkMode?"☀️":"🌙"}</button>
-            {/* Shortcuts */}
-            <button className="btn btn-ghost btn-xs btn-icon" onClick={()=>setShowShortcuts(true)} title="Keyboard shortcuts">⌨️</button>
-            <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,padding:"4px 10px",background:score>=70?"var(--green-lt)":score>=50?"var(--amber-lt)":"var(--red-lt)",borderRadius:99,color:score>=70?"#059669":score>=50?"#D97706":"#DC2626",fontWeight:600,letterSpacing:.5,border:`1px solid ${score>=70?"#A7F3D0":score>=50?"#FDE68A":"#FCA5A5"}`}}>◎ {score}</div>
-            {data.reminders.filter(r=>r.date>=todayStr()).length>0&&(
-              <button className="bell-btn" onClick={()=>setView("calendar")}>🔔<span className="bell-count">{data.reminders.filter(r=>r.date>=todayStr()).length}</span></button>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {stats.overdue>0 && (
+              <button onClick={()=>setView("warroom")} style={{padding:"4px 12px",background:"#FEE2E2",border:"1px solid #FCA5A5",borderRadius:99,color:"#B91C1C",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                {stats.overdue} overdue
+              </button>
             )}
-            <div style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:99,background:dbStatus==="ok"?"var(--green-lt)":dbStatus==="loading"?"var(--ai-bg)":"var(--red-lt)",border:`1px solid ${dbStatus==="ok"?"#A7F3D0":dbStatus==="loading"?"var(--ai-border)":"#FCA5A5"}`}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:dbStatus==="ok"?"#059669":dbStatus==="loading"?"#2563EB":"#DC2626",boxShadow:dbStatus==="ok"?"0 0 6px #059669":"none"}}/>
-              <span style={{fontFamily:"Martian Mono,monospace",fontSize:8,color:dbStatus==="ok"?"#059669":dbStatus==="loading"?"#2563EB":"#DC2626",fontWeight:600,letterSpacing:.5}}>{dbStatus==="ok"?"CLOUD":dbStatus==="loading"?"SYNC...":"LOCAL"}</span>
+            <button onClick={()=>setShowGlobalSearch(true)} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 12px",background:"#F3F4F6",border:"none",borderRadius:99,color:"#6B7280",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>
+              <span style={{fontSize:13}}>⌕</span> Search
+            </button>
+            <div className="topbar-more-wrap">
+              <button className="topbar-more-btn" onClick={()=>setShowTopbarMore(p=>!p)}>⋯</button>
+              {showTopbarMore && (
+                <div className="topbar-more-menu" onClick={()=>setShowTopbarMore(false)}>
+                  <button onClick={()=>setShowShortcuts(true)}>⌨ Shortcuts</button>
+                  <button onClick={startVoice}>🎤 Voice</button>
+                  <div className="topbar-menu-divider"/>
+                  <button onClick={generateNarrative}>📖 Weekly story</button>
+                  <button onClick={generateProfile}>🧬 Profile</button>
+                  <button onClick={()=>setRadioMode(true)}>📻 Focus mode</button>
+                  <button onClick={()=>setShowWhatIf(true)}>🔮 What-If</button>
+                </div>
+              )}
             </div>
-            {stats.overdue>0&&<button onClick={()=>setView("warroom")} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",background:"rgba(220,38,38,.1)",border:"1px solid rgba(220,38,38,.3)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"#DC2626",cursor:"pointer",fontWeight:600}}>⚔ WAR ROOM <span style={{background:"#DC2626",color:"#fff",borderRadius:99,padding:"0 5px",fontSize:7.5,marginLeft:2}}>{stats.overdue}</span></button>}
-            <button onClick={()=>{generateNarrative();}} title="Your week as a story" className="topbar-hide-mob" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>📖 Story</button>
-            <button onClick={()=>{generateProfile();}} title="Productivity Profile" className="topbar-hide-mob" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>🧬 Profile</button>
-            <button onClick={()=>setRadioMode(true)} title="PRODASH Radio — ambient focus mode" className="topbar-hide-mob" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>📻 Radio</button>
-            <button onClick={()=>setShowWhatIf(true)} title="What-If Simulator" className="topbar-hide-mob" style={{padding:"4px 10px",background:"transparent",border:"1px solid var(--line)",borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"var(--ink-3)",cursor:"pointer"}}>🔮 What-If</button>
-            <button onClick={startVoice} title="Voice capture" style={{padding:"4px 10px",background:voiceActive?"rgba(220,38,38,.15)":"transparent",border:`1px solid ${voiceActive?"rgba(220,38,38,.5)":"var(--line)"}`,borderRadius:99,fontFamily:"Martian Mono,monospace",fontSize:8.5,color:voiceActive?"#DC2626":"var(--ink-3)",cursor:"pointer"}}>🎤 {voiceActive?"…":""}</button>
-            <LiveClock/>
-            <div className="topbar-dot" style={{background:"#4ADE80",boxShadow:"0 0 8px #4ADE80"}}/>
+            <div className={`topbar-status topbar-status-${dbStatus}`} title={dbStatus==="ok"?"Synced":dbStatus==="loading"?"Syncing...":"Local only"}/>
           </div>
         </div>
 
@@ -4090,7 +4090,7 @@ SMART ALLOCATION RULES:
         </div>
       )}
       {/* Floating PA button */}
-      {view!=="pa"&&<div style={{position:"fixed",bottom:24,left:220,zIndex:100}} className="float-capture">
+      {view!=="pa"&&<div style={{position:"fixed",bottom:28,right:24,zIndex:100}} className="float-capture">
         <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
           <button onClick={()=>{setShowBrainDump(p=>!p);}} title="Ask your PA" style={{width:46,height:46,borderRadius:99,background:"linear-gradient(135deg,#4F46E5,#7C3AED)",border:"none",color:"#fff",fontSize:22,cursor:"pointer",boxShadow:"0 4px 20px rgba(79,70,229,.5)",transition:"transform .15s",display:"flex",alignItems:"center",justifyContent:"center"}}
             onMouseEnter={e=>e.currentTarget.style.transform="scale(1.1)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>🤖</button>
