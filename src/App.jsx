@@ -2491,74 +2491,88 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
     const urgent=allTasks.filter(t=>!t.done&&t.priority==="urgent"&&(!t.due||t.due>=today));
     const stale=allTasks.filter(t=>!t.done&&taskAgeDays(t.createdAt)>7&&t.priority!=="urgent");
     const critical=overdue.length+urgent.length;
-    return (
-      <div style={{background:"#05060F",minHeight:"100%",padding:"28px 32px"}}>
-        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:28}}>
-          <div>
-            <div style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"rgba(220,38,38,.6)",letterSpacing:4,marginBottom:6,textTransform:"uppercase"}}>PRODASH · COMMAND CENTER</div>
-            <div style={{fontFamily:"Martian Mono,monospace",fontSize:28,fontWeight:700,color:"#fff",letterSpacing:-1,lineHeight:1,marginBottom:5}}>⚔ WAR ROOM</div>
-            <div style={{fontSize:12.5,color:"rgba(255,255,255,.3)"}}>{new Date().toLocaleString("en-GB",{weekday:"long",day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"})}</div>
-          </div>
-          <div style={{textAlign:"right"}}>
-            <div style={{fontFamily:"Martian Mono,monospace",fontSize:44,fontWeight:700,color:critical>0?"#DC2626":"#059669",lineHeight:1,letterSpacing:-2}}>{critical}</div>
-            <div style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"rgba(255,255,255,.25)",letterSpacing:2,marginTop:3,textTransform:"uppercase"}}>CRITICAL ITEMS</div>
+
+    const renderTaskCard = (t,sectionColor)=>{
+      const db = t.due ? dueBadge(t.due) : null;
+      return (
+        <div key={t.id} className="wr-task-card" onClick={()=>{setActiveBrand(t.brandId);setBrandTab(t.tab);setView("brand");}}>
+          <div className="wr-task-title">{t.title}</div>
+          <div className="wr-task-meta">
+            {t.brand && (
+              <span className="task-brand-chip" style={{background:t.brand.color+"15",color:t.brand.color}}>
+                {t.brand.name}
+              </span>
+            )}
+            {t.tab && <span className="task-tab-chip">{t.tab}</span>}
+            {db && <span className="wr-due-badge" style={{background:db.bg,color:db.color}}>{db.label}</span>}
           </div>
         </div>
+      );
+    };
+
+    return (
+      <div className="wr-page">
+        {/* Header */}
+        <div className="wr-header">
+          <div>
+            <div className="wr-eyebrow">Command Centre</div>
+            <h1 className="wr-title">War Room</h1>
+            <div className="wr-date">{new Date().toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long"})}</div>
+          </div>
+          <div className="wr-critical">
+            <div className="wr-critical-num" style={{color:critical>0?"#DC2626":"#059669"}}>{critical}</div>
+            <div className="wr-critical-label">{critical===1?"critical item":"critical items"}</div>
+          </div>
+        </div>
+
         {/* Brand health grid */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:8,marginBottom:24}}>
-          {bStats.map(b=>(
-            <div key={b.id} onClick={()=>{setActiveBrand(b.id);setView("brand");}} style={{background:"rgba(255,255,255,.04)",border:`1px solid ${b.overdue>0?"rgba(220,38,38,.4)":"rgba(255,255,255,.07)"}`,borderRadius:10,padding:"12px 10px",cursor:"pointer",transition:"background .15s"}}
-              onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.08)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,.04)"}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                <span style={{fontSize:16}}>{b.emoji}</span>
-                <span style={{fontFamily:"Martian Mono,monospace",fontSize:18,fontWeight:700,color:b.hg?.color||"#9099B8"}}>{b.hg?.grade||"—"}</span>
+        <div className="wr-brand-grid">
+          {bStats.filter(b=>CORE_BRAND_IDS.includes(b.id)).map(b=>(
+            <div key={b.id} onClick={()=>{setActiveBrand(b.id);setView("brand");}}
+              className={`wr-brand-card${b.overdue>0?" wr-brand-card-alert":""}`}>
+              <div className="wr-brand-head">
+                <span className="wr-brand-dot" style={{background:b.color}}/>
+                <span className="wr-brand-name">{b.name}</span>
+                <span className="wr-brand-grade" style={{color:b.hg?.color||"#9CA3AF"}}>{b.hg?.grade||"—"}</span>
               </div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                <div style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,fontWeight:600,color:"rgba(255,255,255,.4)",letterSpacing:1,textTransform:"uppercase"}}>{b.name}</div>
-                {(()=>{const t=brandTemp(b,Object.entries(data.tasks).filter(([k])=>k.startsWith(b.id)).flatMap(([,v])=>v));return<span style={{fontSize:9,color:t.color}}>{t.label}</span>})()}
-              </div>
-              <div style={{height:3,background:"rgba(255,255,255,.08)",borderRadius:99,marginBottom:5}}>
-                <div style={{height:"100%",width:b.rate+"%",background:b.hg?.color||"#9099B8",borderRadius:99}}/>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between"}}>
-                <span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"rgba(255,255,255,.25)"}}>{b.rate}%</span>
-                {b.overdue>0&&<span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"#DC2626",fontWeight:700}}>⚠{b.overdue}</span>}
+              <div className="wr-brand-bar"><div style={{width:b.rate+"%",background:b.hg?.color||"#9CA3AF"}}/></div>
+              <div className="wr-brand-meta">
+                <span>{b.rate}% complete</span>
+                {b.overdue>0&&<span className="wr-brand-overdue">{b.overdue} overdue</span>}
               </div>
             </div>
           ))}
         </div>
-        {/* AI Emergency Brief */}
-        <div style={{background:"rgba(79,70,229,.1)",border:"1px solid rgba(79,70,229,.25)",borderRadius:12,padding:"14px 18px",marginBottom:20}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:insights["warroom"]?10:0}}>
-            <span style={{fontFamily:"Martian Mono,monospace",fontSize:9,color:"rgba(79,70,229,.8)",letterSpacing:2,textTransform:"uppercase"}}>◎ AI EMERGENCY ASSESSMENT</span>
+
+        {/* AI Brief */}
+        <div className="wr-ai-brief">
+          <div className="wr-ai-head">
+            <div className="wr-ai-label">AI Emergency Assessment</div>
             <button onClick={()=>fetchInsight("warroom","WAR ROOM: "+overdue.length+" overdue, "+urgent.length+" urgent. In 3 sharp sentences: the single biggest risk right now, the 2 most critical tasks, one decisive action. Be brutally direct.")}
-              disabled={insightLoading["warroom"]} style={{fontFamily:"Martian Mono,monospace",fontSize:9.5,padding:"4px 12px",background:"rgba(79,70,229,.25)",border:"1px solid rgba(79,70,229,.4)",borderRadius:6,color:"#A5B4FC",cursor:"pointer"}}>
-              {insightLoading["warroom"]?"Analysing...":"◎ Emergency Brief"}
+              disabled={insightLoading["warroom"]} className="wr-ai-btn">
+              {insightLoading["warroom"]?"Analysing...":"Generate brief →"}
             </button>
           </div>
-          {insightLoading["warroom"]&&<div style={{color:"rgba(165,180,252,.7)",fontSize:12,display:"flex",gap:8,alignItems:"center"}}><span className="typing-dots"><span/><span/><span/></span> Assessing...</div>}
-          {insights["warroom"]&&<div style={{fontSize:13,color:"rgba(255,255,255,.75)",lineHeight:1.75}}>{insights["warroom"]}</div>}
+          {insightLoading["warroom"]&&<div className="wr-ai-loading">Assessing your data...</div>}
+          {insights["warroom"]&&<div className="wr-ai-text">{insights["warroom"]}</div>}
+          {!insights["warroom"]&&!insightLoading["warroom"]&&<div className="wr-ai-empty">Tap to get an instant assessment of what to do now.</div>}
         </div>
+
         {/* Three columns */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
+        <div className="wr-columns">
           {[
-            {label:"OVERDUE",items:overdue,color:"#DC2626",bg:"rgba(220,38,38,.07)",border:"rgba(220,38,38,.2)"},
-            {label:"URGENT",items:urgent,color:"#D97706",bg:"rgba(217,119,6,.07)",border:"rgba(217,119,6,.2)"},
-            {label:"STALE (7+ days)",items:stale.slice(0,8),color:"#F97316",bg:"rgba(249,115,22,.06)",border:"rgba(249,115,22,.15)"},
-          ].map(({label,items,color,bg,border})=>(
-            <div key={label}>
-              <div style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:color+"cc",letterSpacing:2.5,marginBottom:12,textTransform:"uppercase"}}>{label} ({items.length})</div>
-              {!items.length&&<div style={{color:"rgba(255,255,255,.15)",fontSize:12,padding:"12px 0"}}>✓ Clear</div>}
-              {items.slice(0,8).map(t=>(
-                <div key={t.id} onClick={()=>{setActiveBrand(t.brandId);setBrandTab(t.tab);setView("brand");}} style={{background:bg,border:"1px solid "+border,borderRadius:8,padding:"9px 12px",marginBottom:7,cursor:"pointer"}}>
-                  <div style={{fontSize:12.5,fontWeight:500,color:"#fff",marginBottom:5,lineHeight:1.35}}>{t.title}</div>
-                  <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
-                    <span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:t.brand?.color||"#9099B8"}}>{t.brand?.emoji} {t.brand?.name}</span>
-                    {t.due&&(()=>{const db=dueBadge(t.due);return db?<span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,fontWeight:600,color:db.color,background:db.bg,padding:"1px 6px",borderRadius:99,marginLeft:4}}>{db.label}</span>:<span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:color+"cc"}}>📅 {fmtDate(t.due)}</span>;})()}
-                    <span style={{fontFamily:"Martian Mono,monospace",fontSize:8.5,color:"rgba(255,255,255,.25)"}}>{t.tab}</span>
-                  </div>
-                </div>
-              ))}
+            {label:"Overdue",items:overdue,color:"#B91C1C",bg:"#FEE2E2"},
+            {label:"Urgent",items:urgent,color:"#B45309",bg:"#FEF3C7"},
+            {label:"Stale (7+ days)",items:stale.slice(0,8),color:"#92400E",bg:"#FED7AA"},
+          ].map(({label,items,color,bg})=>(
+            <div key={label} className="wr-column">
+              <div className="wr-column-head">
+                <span style={{color}}>{label}</span>
+                <span className="wr-column-count" style={{background:bg,color}}>{items.length}</span>
+              </div>
+              {!items.length&&<div className="wr-column-empty">✓ All clear</div>}
+              {items.slice(0,10).map(t=>renderTaskCard(t,color))}
+              {items.length>10&&<div className="wr-column-more">+ {items.length-10} more</div>}
             </div>
           ))}
         </div>
@@ -3996,9 +4010,9 @@ SMART ALLOCATION RULES:
           ))}
         </div>
         <div className="nav-section">
-          <div className="nav-section-label" style={{cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}} onClick={()=>setShowMoreNav(p=>!p)}>
+          <div className="nav-section-label nav-more-toggle" onClick={()=>setShowMoreNav(p=>!p)}>
             <span>More</span>
-            <span style={{fontSize:9,color:"var(--ink-4)"}}>{showMoreNav?"−":"+"}</span>
+            <span className="nav-more-arrow">{showMoreNav?"▾":"▸"}</span>
           </div>
           {showMoreNav && NAV_MORE.map(item=>(
             <div key={item.id} className={`nav-item${view===item.id&&!activeBrand?" active":""}`} onClick={()=>{setView(item.id);setActiveBrand(null);setSidebarOpen(false);}}>
