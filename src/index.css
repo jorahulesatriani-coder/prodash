@@ -1108,3 +1108,152 @@ html, body, #root { background: #FAFAF7; }
   flex: 1;
   text-decoration: line-through;
 }
+
+/* ══════════════════════════════════════════
+   v6 — Smart Quick Add Card + Empty State
+   ══════════════════════════════════════════ */
+
+.qa-card {
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 22px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.qa-card:focus-within {
+  border-color: #4F46E5;
+  box-shadow: 0 0 0 3px rgba(79,70,229,0.08);
+}
+
+.qa-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  color: #111827;
+  padding: 4px 4px 12px;
+  outline: none;
+  font-family: inherit;
+  font-weight: 500;
+}
+.qa-input::placeholder { color: #9CA3AF; font-weight: 400; }
+
+.qa-meta-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  border-top: 1px solid #F3F4F6;
+  padding-top: 12px;
+}
+
+.qa-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.qa-field label {
+  font-size: 10px;
+  color: #9CA3AF;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.qa-select {
+  font-size: 12.5px;
+  padding: 6px 8px;
+  border: 1px solid #E5E7EB;
+  border-radius: 7px;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+  min-width: 0;
+  transition: border-color 0.15s;
+}
+.qa-select:hover { border-color: #9CA3AF; }
+.qa-select:focus { border-color: #4F46E5; }
+
+.qa-add-btn {
+  margin-left: auto;
+  padding: 8px 18px;
+  background: #1F2233;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.1s;
+  font-family: inherit;
+}
+.qa-add-btn:hover { background: #111; }
+.qa-add-btn:disabled { background: #D1D5DB; cursor: not-allowed; }
+
+/* Better empty state */
+.dash-empty { padding: 48px 24px; text-align: center; }
+.dash-empty-headline {
+  font-size: 16px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+.dash-empty-sub {
+  font-size: 13px;
+  color: #9CA3AF;
+  margin-bottom: 18px;
+}
+.dash-empty-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 340px;
+  margin: 0 auto;
+}
+.dash-empty-example {
+  text-align: left;
+  padding: 10px 14px;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.dash-empty-example:hover {
+  background: #fff;
+  border-color: #4F46E5;
+  color: #4F46E5;
+  transform: translateX(2px);
+}
+
+/* Topbar overflow fix - prevent search from bleeding off */
+.topbar { overflow: hidden; }
+.topbar > div:last-child { flex-shrink: 0; }
+
+/* Mobile quick add card */
+@media (max-width: 640px) {
+  .qa-card { padding: 12px; }
+  .qa-input { font-size: 16px; }
+  .qa-meta-row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .qa-field { width: 100%; }
+  .qa-select { width: 100%; padding: 9px 10px; font-size: 14px; }
+  .qa-add-btn { width: 100%; margin-left: 0; padding: 11px; }
+}
+
+/* Task tab chip — make it always visible but subtle */
+.task-tab-chip {
+  font-size: 10.5px;
+  color: #6B7280;
+  font-weight: 400;
+  padding: 2px 7px;
+  background: #F3F4F6;
+  border-radius: 99px;
+  white-space: nowrap;
+}
