@@ -2794,24 +2794,144 @@ YOUR MANDATE: Be brutally specific — reference actual brand names, exact numbe
           };
 
           if(sorted.length===0){
+            // Useful content for empty days - not just "nothing here"
+            const allDoneRecent = allTasksFlat.filter(t=>t.done && t.doneAt && (Date.now()-new Date(t.doneAt))<7*86400000);
+            const allDoneToday = allTasksFlat.filter(t=>t.done && t.doneAt && t.doneAt.startsWith(today));
+            // Next 14 days lookahead
+            const futureUpcoming = Object.entries(data.tasks).flatMap(([k,ts])=>
+              ts.filter(t=>!t.done&&t.due&&t.due>today).map(t=>{
+                const [bId,...rest]=k.split("_");
+                return {...t,key:k,brand:bId,tab:rest.join("_")};
+              })
+            ).sort((a,b)=>a.due.localeCompare(b.due)).slice(0,5);
+            // 14-day shape bar
+            const next14 = Array.from({length:14},(_,i)=>{
+              const d=new Date(); d.setDate(d.getDate()+i);
+              const dStr=d.toISOString().split("T")[0];
+              const count = Object.values(data.tasks).flat().filter(t=>!t.done&&t.due===dStr).length;
+              return {date:dStr, day:d.toLocaleDateString("en-AU",{weekday:"short"}).slice(0,1), dayNum:d.getDate(), count, isToday:dStr===today};
+            });
+            const maxCount = Math.max(1,...next14.map(d=>d.count));
+            // Brand activity
+            const brandActivity = CORE_BRANDS().map(b=>{
+              const tasks = Object.entries(data.tasks).filter(([k])=>k.startsWith(b.id)).flatMap(([,v])=>v);
+              const recent = tasks.filter(t=>(t.createdAt||"")>=new Date(Date.now()-7*86400000).toISOString().split("T")[0] || (t.doneAt||"")>=new Date(Date.now()-7*86400000).toISOString().split("T")[0]).length;
+              return {brand:b, recent, total:tasks.length, pending:tasks.filter(t=>!t.done).length};
+            }).sort((a,b)=>b.recent-a.recent);
+            
+            const headline = dashBrandFilter==="all"
+              ? (allDoneRecent.length>0 ? `All clear. ${allDoneRecent.length} ${allDoneRecent.length===1?"task":"tasks"} done this week.` : "All clear. Nothing pending.")
+              : `No pending tasks for ${BRANDS.find(b=>b.id===dashBrandFilter)?.name||"this brand"}.`;
+            
             return (
-              <div className="dash-list">
-                <div className="dash-empty">
-                  <div className="dash-empty-headline">{dashBrandFilter==="all" ? "Nothing pending." : `No pending tasks for ${BRANDS.find(b=>b.id===dashBrandFilter)?.name||"this brand"}.`}</div>
-                  <div className="dash-empty-sub">Start with something small. Try:</div>
-                  <div className="dash-empty-examples">
-                    <button className="dash-empty-example" onClick={()=>{
-                      addTask({title:"Review weekly compliance reports",due:todayStr(),priority:"high",brand:"goldbet",tab:"Compliance"});
-                    }}>Review weekly compliance reports →</button>
-                    <button className="dash-empty-example" onClick={()=>{
-                      const f=new Date(); f.setDate(f.getDate()+(5-f.getDay()+7)%7); 
-                      addTask({title:"Submit monthly turnover figures",due:f.toISOString().split("T")[0],priority:"medium",brand:"goldbet",tab:"Reporting"});
-                    }}>Submit monthly turnover figures →</button>
-                    <button className="dash-empty-example" onClick={()=>setView("pa")}>
-                      Or just talk to your PA →
-                    </button>
+              <div className="dash-empty-rich">
+                <div className="dash-empty-rich-header">{headline}</div>
+
+                {/* 14-day shape bar */}
+                {futureUpcoming.length>0 && (
+                  <div className="dash-shape-section">
+                    <div className="dash-shape-label">The next 14 days</div>
+                    <div className="dash-shape-bar">
+                      {next14.map((d,i)=>(
+                        <div key={i} className={`dash-shape-col${d.isToday?" is-today":""}`} title={`${d.date}: ${d.count} task${d.count!==1?"s":""}`}>
+                          <div className="dash-shape-fill" style={{height:d.count>0?`${(d.count/maxCount)*100}%`:"3px",background:d.count===0?"#E5E7EB":d.isToday?"#4F46E5":d.count>=3?"#DC2626":d.count>=2?"#D97706":"#9CA3AF"}}/>
+                          <div className="dash-shape-day">{d.day}</div>
+                          {d.count>0&&<div className="dash-shape-count">{d.count}</div>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                )}
+
+                {/* Two-column: upcoming + recent done */}
+                <div className="dash-empty-grid">
+                  {futureUpcoming.length>0 && (
+                    <div className="dash-empty-block">
+                      <div className="dash-empty-block-head">Coming up</div>
+                      {futureUpcoming.map(t=>{
+                        const b=BRANDS.find(x=>x.id===t.brand);
+                        const dueDate=new Date(t.due);
+                        const daysAway=Math.ceil((dueDate-new Date(today))/86400000);
+                        return (
+                          <div key={t.id} className="dash-upcoming-row" onClick={()=>{setActiveBrand(t.brand);setBrandTab(t.tab||"Miscellaneous");setView("brand");}}>
+                            <div className="dash-upcoming-when">
+                              <div className="dash-upcoming-day">{daysAway===1?"Tmrw":daysAway<7?dueDate.toLocaleDateString("en-AU",{weekday:"short"}):dueDate.toLocaleDateString("en-AU",{day:"numeric",month:"short"})}</div>
+                              <div className="dash-upcoming-rel">in {daysAway}d</div>
+                            </div>
+                            <div className="dash-upcoming-info">
+                              <div className="dash-upcoming-title">{t.title}</div>
+                              {b && <span className="task-brand-chip" style={{background:b.color+"15",color:b.color}}>{b.name}</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  
+                  {allDoneRecent.length>0 && (
+                    <div className="dash-empty-block">
+                      <div className="dash-empty-block-head">Recently shipped</div>
+                      <div className="dash-recent-strip">
+                        <div className="dash-recent-num">{allDoneRecent.length}</div>
+                        <div className="dash-recent-text">
+                          <div>{allDoneRecent.length===1?"task":"tasks"} completed in the last 7 days</div>
+                          {allDoneToday.length>0 && <div className="dash-recent-today">{allDoneToday.length} today</div>}
+                        </div>
+                      </div>
+                      <div className="dash-recent-list">
+                        {allDoneRecent.slice(0,5).map(t=>{
+                          const b=BRANDS.find(x=>x.id===t.brand);
+                          return (
+                            <div key={t.id} className="dash-recent-row">
+                              <span className="dash-recent-check">✓</span>
+                              <span className="dash-recent-title">{t.title}</span>
+                              {b && <span className="task-brand-chip" style={{background:b.color+"15",color:b.color,fontSize:10.5}}>{b.name}</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {/* Brand activity pulse */}
+                {dashBrandFilter==="all" && brandActivity.some(b=>b.total>0) && (
+                  <div className="dash-empty-block dash-brand-pulse">
+                    <div className="dash-empty-block-head">Brand pulse — last 7 days</div>
+                    <div className="dash-pulse-grid">
+                      {brandActivity.filter(b=>b.total>0).map(({brand:b,recent,pending})=>(
+                        <div key={b.id} className="dash-pulse-row" onClick={()=>{setActiveBrand(b.id);setView("brand");}}>
+                          <span className="dash-pulse-dot" style={{background:b.color}}/>
+                          <span className="dash-pulse-name">{b.name}</span>
+                          <div className="dash-pulse-meter">
+                            {Array.from({length:Math.min(7,Math.max(1,recent))}).map((_,i)=><span key={i} style={{background:b.color}}/>)}
+                          </div>
+                          <span className="dash-pulse-count">{recent} {recent===1?"action":"actions"}</span>
+                          {pending>0 && <span className="dash-pulse-pending">{pending} pending</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* No data at all - show the original suggestions */}
+                {allDoneRecent.length===0 && futureUpcoming.length===0 && (
+                  <div className="dash-empty-block">
+                    <div className="dash-empty-block-head">Start with something small</div>
+                    <div className="dash-empty-examples">
+                      <button className="dash-empty-example" onClick={()=>{
+                        addTask({title:"Review weekly compliance reports",due:todayStr(),priority:"high",brand:"goldbet",tab:"Compliance"});
+                      }}>Review weekly compliance reports →</button>
+                      <button className="dash-empty-example" onClick={()=>{
+                        const f=new Date(); f.setDate(f.getDate()+(5-f.getDay()+7)%7); 
+                        addTask({title:"Submit monthly turnover figures",due:f.toISOString().split("T")[0],priority:"medium",brand:"goldbet",tab:"Reporting"});
+                      }}>Submit monthly turnover figures →</button>
+                      <button className="dash-empty-example" onClick={()=>setView("pa")}>
+                        Or just talk to your PA →
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           }
